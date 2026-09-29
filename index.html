@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NowPlaying</title>
+<!-- The Cast receiver framework (Google's): gives us the channel the PC's app talks on. -->
+<script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
+<style>
+  :root { --tint: #7a9cff; }
+  html, body { margin: 0; height: 100%; background: #07070a; color: #fff; overflow: hidden;
+    font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  /* The living cover: the picture blown up and blurred behind everything, drifting slowly. */
+  #bg { position: absolute; inset: -12%; background-size: cover; background-position: center;
+    filter: blur(60px) saturate(1.35) brightness(0.55); transform: scale(1.1);
+    animation: drift 38s ease-in-out infinite alternate; transition: background-image 1.2s ease; }
+  @keyframes drift { from { transform: scale(1.1) translate(-2%, -1%) rotate(-1deg); }
+                     to   { transform: scale(1.22) translate(2%, 1.5%) rotate(1.2deg); } }
+  #veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(0,0,0,0.05), rgba(0,0,0,0.55) 75%); }
+  #stage { position: absolute; inset: 0; display: grid; grid-template-columns: 38% 62%; align-items: center; }
+  /* Left: the sharp cover, its title and the time. */
+  #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: 7vw; }
+  #cover { width: 26vw; height: 26vw; border-radius: 1.2vw; background: #222 center/cover no-repeat;
+    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); transition: transform 0.7s cubic-bezier(.2,.8,.2,1), opacity 0.4s; }
+  #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; max-width: 28vw; line-height: 1.1;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; max-width: 28vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; }
+  #bar { width: 26vw; height: 0.35vw; background: rgba(255,255,255,0.18); border-radius: 1vw; margin-top: 2vw; overflow: hidden; }
+  #fill { height: 100%; width: 0; background: var(--tint); border-radius: 1vw; }
+  #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.6vw; }
+  /* Right: the lyrics, the sung line bright and a third down; or, without lyrics, what comes next. */
+  #right { height: 80vh; position: relative; overflow: hidden; margin-right: 6vw;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%); }
+  #lines { position: absolute; left: 0; right: 0; top: 0; transition: transform 0.55s cubic-bezier(.25,.8,.25,1); }
+  .line { font-size: 2.6vw; font-weight: 700; line-height: 1.25; padding: 0.55vw 0; opacity: 0.28;
+    transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(0.06vw); }
+  .line.now { opacity: 1; color: var(--sung, #fff); filter: none; }
+  .line.near { opacity: 0.5; filter: none; }
+  #next { position: absolute; left: 0; right: 0; top: 0; }
+  #nextHead { font-size: 1vw; letter-spacing: 0.3em; opacity: 0.55; margin-bottom: 1.4vw; }
+  .nx { display: flex; align-items: center; margin-bottom: 1.2vw; }
+  .nx .a { width: 4.4vw; height: 4.4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
+  .nx .t { margin-left: 1.2vw; min-width: 0; }
+  .nx .t b { display: block; font-size: 1.6vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx .t span { display: block; font-size: 1.1vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: 2vw; letter-spacing: 0.4em; opacity: 0.5; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="bg"></div><div id="veil"></div>
+<div id="stage" class="hidden">
+  <div id="left">
+    <div id="from"></div>
+    <div id="cover"></div>
+    <div id="title"></div>
+    <div id="artist"></div>
+    <div id="bar"><div id="fill"></div></div>
+    <div id="times"><span id="el">0:00</span><span id="left_">0:00</span></div>
+  </div>
+  <div id="right"><div id="lines"></div><div id="next" class="hidden"><div id="nextHead">UP NEXT</div><div id="nextList"></div></div></div>
+</div>
+<div id="idle">NOWPLAYING</div>
+<script>
+/*
+ * NowPlaying on the TV. The PC's app (NowPlaying, Windows) connects to this receiver and sends
+ * JSON on the namespace below, whenever something changes and every few seconds:
+ *   { type: "state", title, artist, album, from, art (https URL or data: URL), tint "#rrggbb",
+ *     sung "#rrggbb", pos (ms), len (ms), playing (bool),
+ *     lines: [{ t: ms, x: "text" }] | null, next: [{ title, artist, art }] }
+ * Between messages the position runs on here, so the lyrics and the bar move smoothly.
+ */
+const NS = 'urn:x-cast:app.nowplaying';
+const $ = id => document.getElementById(id);
+let st = null, at = 0, lastLines = null, cur = -2;
+
+function fmt(ms) { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+
+function apply(m) {
+  if (m.type !== 'state') return;
+  const fresh = !st || st.title !== m.title || st.artist !== m.artist;
+  st = m; at = performance.now();
+  $('idle').classList.add('hidden'); $('stage').classList.remove('hidden');
+  document.documentElement.style.setProperty('--tint', m.tint || '#7a9cff');
+  document.documentElement.style.setProperty('--sung', m.sung || '#fff');
+  $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
+  $('from').textContent = m.from || '';
+  if (m.art) { const u = 'url("' + m.art + '")'; $('cover').style.backgroundImage = u; $('bg').style.backgroundImage = u; }
+  if (fresh) { $('cover').style.transform = 'scale(0.96)'; setTimeout(() => $('cover').style.transform = 'scale(1)', 30); }
+  const key = JSON.stringify(m.lines || null);
+  if (key !== lastLines) { lastLines = key; build(m.lines); cur = -2; }
+  const nl = $('nextList'); nl.innerHTML = '';
+  (m.next || []).slice(0, 6).forEach(n => {
+    const d = document.createElement('div'); d.className = 'nx';
+    d.innerHTML = '<div class="a"></div><div class="t"><b></b><span></span></div>';
+    if (n.art) d.querySelector('.a').style.backgroundImage = 'url("' + n.art + '")';
+    d.querySelector('b').textContent = n.title || ''; d.querySelector('span').textContent = n.artist || '';
+    nl.appendChild(d);
+  });
+}
+
+function build(lines) {
+  const box = $('lines'); box.innerHTML = '';
+  const has = lines && lines.length > 0;
+  $('next').classList.toggle('hidden', has);
+  box.classList.toggle('hidden', !has);
+  if (!has) return;
+  lines.forEach(l => { const d = document.createElement('div'); d.className = 'line'; d.textContent = l.x || ' '; box.appendChild(d); });
+}
+
+function tick() {
+  requestAnimationFrame(tick);
+  if (!st) return;
+  const pos = Math.min(st.len || 0, st.pos + (st.playing ? performance.now() - at : 0));
+  $('fill').style.width = st.len ? (100 * pos / st.len) + '%' : '0';
+  $('el').textContent = fmt(pos); $('left_').textContent = '−' + fmt((st.len || 0) - pos);
+  const lines = st.lines;
+  if (!lines || !lines.length) return;
+  let i = -1;
+  for (let k = 0; k < lines.length; k++) if (lines[k].t <= pos + 250) i = k; else break;
+  if (i === cur) return;
+  cur = i;
+  const box = $('lines'), kids = box.children;
+  for (let k = 0; k < kids.length; k++) kids[k].className = 'line' + (k === i ? ' now' : Math.abs(k - i) === 1 ? ' near' : '');
+  const el = kids[Math.max(0, i)];
+  const y = el ? el.offsetTop - $('right').clientHeight / 3 : 0;
+  box.style.transform = 'translateY(' + (-Math.max(0, y)) + 'px)';
+}
+requestAnimationFrame(tick);
+
+const context = cast.framework.CastReceiverContext.getInstance();
+context.addCustomMessageListener(NS, e => { try { apply(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); } });
+const options = new cast.framework.CastReceiverOptions();
+options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
+options.disableIdleTimeout = true;   // a now-playing screen: it stays while the PC talks to it
+options.skipPlayersLoad = true;      // no media player of its own
+context.start(options);
+</script>
+</body>
+</html>
