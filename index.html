@@ -35,9 +35,13 @@
   .words { transition: opacity 0.28s ease, transform 0.45s cubic-bezier(.2,.8,.2,1); }
   .words.out { opacity: 0; transform: translateY(-0.8vw); }
   .words.pre { opacity: 0; transform: translateY(1vw); transition: none; }
-  #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; max-width: 28vw; line-height: 1.1;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; max-width: 28vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* A long title or artist gets smaller rather than cut (fitText), and at the smallest wraps to
+     a second line. */
+  #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; width: 28vw; line-height: 1.12; white-space: nowrap; }
+  #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; width: 28vw; line-height: 1.2; white-space: nowrap; }
+  #title.wrap, #artist.wrap { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+  #title.wrap { -webkit-line-clamp: 3; }
+  #artist.wrap { -webkit-line-clamp: 2; }
   #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; min-height: 1.2vw; line-height: 1.2vw; }
   #strip { width: 26vw; height: 3vw; margin-top: 1.6vw; display: block; }
   #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.4vw; }
@@ -170,6 +174,19 @@ function onMessage(m) {
   }
 }
 
+// The words at the size they fit: from the full size down in small steps to 55 % of it; still
+// too long, they wrap onto a second line at that size.
+function fitText(id, full) {
+  const e = $(id);
+  e.classList.remove('wrap');
+  let size = full;
+  e.style.fontSize = size + 'vw';
+  while (e.scrollWidth > e.clientWidth + 1 && size > full * 0.55) { size -= full * 0.05; e.style.fontSize = size + 'vw'; }
+  if (e.scrollWidth > e.clientWidth + 1) e.classList.add('wrap');
+}
+function fitWords() { fitText('title', 3.1); fitText('artist', 1.9); }
+window.addEventListener('resize', fitWords);
+
 function badge() { $('badge').classList.toggle('hidden', !opt('logo', true) || !$('badge').dataset.has); }
 
 function state(m) {
@@ -184,10 +201,12 @@ function state(m) {
     ['from', 'title', 'artist'].forEach(id => $(id).classList.add('out'));
     setTimeout(() => {
       $('from').textContent = from; $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
+      fitWords();
       ['from', 'title', 'artist'].forEach(id => { const e = $(id); e.classList.remove('out'); e.classList.add('pre'); void e.offsetWidth; e.classList.remove('pre'); });
     }, 280);
   } else {
     $('from').textContent = from; $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
+    fitWords();
   }
   shownKey = m.key;
   badge();
