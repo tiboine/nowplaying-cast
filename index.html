@@ -733,7 +733,8 @@ options.supportedCommands = cast.framework.messages.Command.PAUSE | cast.framewo
 const pm = context.getPlayerManager();
 const quiet = document.createElement('audio'); quiet.style.display = 'none'; document.body.appendChild(quiet);
 pm.setMediaElement(quiet);
-const SILENCE = new URL('silence.wav', location.href).href;
+let SILENCE = 'https://tiboine.github.io/nowplaying-cast/silence.wav';
+try { if (location.protocol === 'https:') SILENCE = new URL('silence.wav', location.href).href; } catch (x) { }
 function remote(cmd) {
   try { if (senderId) context.sendCustomMessage(NS, senderId, { type: 'remote', cmd: cmd }); } catch (x) { console.log(x); }
 }
