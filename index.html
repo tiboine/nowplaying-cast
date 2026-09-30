@@ -704,8 +704,17 @@ let told = false;
 context.addCustomMessageListener(NS, e => {
   try { onMessage(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); }
   // The first message from the PC is answered with what this screen measures.
+  senderId = e.senderId;
   if (!told) { told = true; try { context.sendCustomMessage(NS, e.senderId, measures()); } catch (x) { console.log(x); } }
 });
+// The remote: which of its keys reach the page at all (a probe, 2.35.2) -- each is told to the
+// PC, which logs it ("Cast: the TV says {type: key ...}").
+let senderId = null;
+context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, e => { senderId = e.senderId; });
+document.addEventListener('keydown', e => {
+  try { if (senderId) context.sendCustomMessage(NS, senderId, { type: 'key', key: e.key, code: e.code, keyCode: e.keyCode }); } catch (x) { console.log(x); }
+});
+
 const options = new cast.framework.CastReceiverOptions();
 options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
 options.disableIdleTimeout = true;   // a now-playing screen: it stays while the PC talks to it
