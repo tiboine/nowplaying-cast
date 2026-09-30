@@ -334,8 +334,8 @@ function buildList() {
   if (!grid) { box.style.gridTemplateColumns = ''; }
   let items = m.items || [], from = 0;
   if (!grid) from = m.mode === 1 ? Math.max(0, m.at - 1) : 0;
-  const count = grid ? 24 : 7;
-  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - gridCols * 3, Math.floor(m.at / gridCols) * gridCols - gridCols));
+  const count = grid ? 32 : 7;
+  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - gridCols * 4, Math.floor(m.at / gridCols) * gridCols - gridCols));
   items.slice(from, from + count).forEach((n, k) => {
     const i = from + k, d = document.createElement('div');
     d.className = (grid ? 'cell' : 'nx') + (m.mode === 1 && i === m.at ? ' now' : '');
@@ -388,28 +388,29 @@ function layout() {
   gridFit(cv, vw);
 }
 
-// The grid sized by the room from the cover's top to the playing title's foot: three rows, the
-// bottom row's last words (the artist under each) ending on the same line as the title playing (whose height changes
-// with how many lines it takes). The covers are as big as that allows; as many columns as fit.
+// The grid sized by the room from the cover's top to the times under the strip: four rows, the
+// bottom row's last words (the artist under each) ending on the same line as the times (lower or higher as
+// the title takes more or fewer lines). The covers are as big as that allows; as many columns as fit.
 let gridCols = 6;
 function gridFit(cv, vw) {
   const box = $('items');
   if (!box.classList.contains('grid') || $('list').classList.contains('hidden')) return;
   const cell = box.querySelector('.cell'); if (!cell) return;
-  const title = $('title');
-  // Not the title's box: it may be gliding in (a transform). Its place in the column instead.
-  const titleFoot = cv.bottom + 2.6 * vw + title.offsetHeight;
+  // Four rows, the bottom row's artists ending on the line of the times under the strip (the left
+  // column's last words; the times never glide, so their box is where they stand).
+  const ROWS = 4;
+  const foot = $('times').getBoundingClientRect().bottom;
   const b = cell.querySelector('b'), sp = cell.querySelector('span');
   const mt = 0.5 * vw, bh = b.offsetHeight, capH = mt + bh + sp.offsetHeight, gap = 1.4 * vw, gapc = 1.2 * vw;
   // The bottom row's LAST line (its artist) ends on the title's foot.
-  const w = (titleFoot - cv.top - 3 * capH - 2 * gap) / 3;
+  const w = (foot - cv.top - ROWS * capH - (ROWS - 1) * gap) / ROWS;
   if (w < 2 * vw) return;
   const cols = Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (w + gapc))));
   box.style.gridTemplateColumns = 'repeat(' + cols + ', ' + w + 'px)';
   box.style.rowGap = gap + 'px'; box.style.columnGap = gapc + 'px';
   box.style.justifyContent = 'space-between';   // the last column ends at the right margin
   const cells = box.children;
-  for (let i = 0; i < cells.length; i++) cells[i].style.display = i < cols * 3 ? '' : 'none';
+  for (let i = 0; i < cells.length; i++) cells[i].style.display = i < cols * ROWS ? '' : 'none';
   if (cols !== gridCols) { gridCols = cols; rightSig = null; right(); }   // a playlist's rows start where the playing one is
 }
 window.addEventListener('resize', layout);
