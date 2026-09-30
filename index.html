@@ -10,8 +10,11 @@
 <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 <style>
   :root { --tint: #7a9cff; }
-  html, body { margin: 0; height: 100%; background: #07070a; color: #fff; overflow: hidden;
+  /* body clips (and is what fill() scales); html must not, or the scaled page is cut at the old size */
+  html { background: #07070a; }
+  html, body { margin: 0; height: 100%; background: #07070a; color: #fff;
     font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+  body { overflow: hidden; position: relative; }
   /* The living cover: the picture blown up and blurred behind everything, drifting slowly. */
   #bg { position: absolute; inset: -12%; background-size: cover; background-position: center;
     filter: blur(60px) saturate(1.35) brightness(0.55); transform: scale(1.1);
