@@ -65,6 +65,7 @@
     -webkit-background-clip: text; background-clip: text; color: transparent; }
   /* The list and the artist start level with "playing from" on the left (--head). */
   #list, #art { position: absolute; left: 0; right: 0; top: var(--head); bottom: 0; transition: opacity 0.5s ease; }
+  .empty { font-size: 1.5vw; opacity: 0.6; max-width: 40vw; line-height: 1.5; }
   .cap { font-size: 0.95vw; letter-spacing: 0.25em; opacity: 0.55; line-height: 1.2vw; margin-bottom: 1.4vw; text-transform: uppercase; }
   .nx { display: flex; align-items: center; margin-bottom: 1.1vw; }
   .nx .a { width: 4.4vw; height: 4.4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
@@ -152,7 +153,7 @@ const NS = 'urn:x-cast:app.nowplaying';
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
-let rightSig = null, shownBands = null, capsAt = null, capsHold = null, px1 = 1;
+let rightSig = null, appNow = '', shownBands = null, capsAt = null, capsHold = null, px1 = 1;
 
 function fmt(ms) { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function opt(k, dflt) { return opts[k] === undefined ? dflt : opts[k]; }
@@ -164,7 +165,7 @@ function onMessage(m) {
     case 'logo':
       if (m.logo && $('logo').src !== m.logo) $('logo').src = m.logo;
       $('logo').classList.toggle('hidden', !m.logo);
-      $('appname').textContent = m.app || '';
+      $('appname').textContent = m.app || ''; appNow = m.app || '';
       $('badge').dataset.has = (m.logo || m.app) ? '1' : '';
       badge();
       break;
@@ -172,7 +173,7 @@ function onMessage(m) {
     case 'list': listMsg = m; right(); corner(); break;
     case 'artist': artistMsg = m; right(); break;
     case 'wave': wave = m.w; waveKey = m.key; break;
-    case 'bands': bands = m.b; bandsAt = performance.now(); break;
+    case 'bands': vis.b = m.b; vis.l = m.l || null; vis.r = m.r || null; vis.s = m.s || null; vis.vl = m.vl || 0; vis.vr = m.vr || 0; vis.at = performance.now(); break;
   }
 }
 
@@ -252,11 +253,14 @@ function right() {
   const lines = linesMsg && linesMsg.key === st.key ? linesMsg.lines : null;
   const hasLyrics = !!(lines && lines.length);
   const hasArtist = !!(artistMsg && artistMsg.name && (artistMsg.bio || artistMsg.pic));
+  // 0 auto: the lyrics, else the list when it has something, else the artist; 1 the lyrics; 2 the
+  // list; 3 the artist (else the list). The empty list says why rather than standing blank.
+  const hasList = !!(listMsg && listMsg.items && listMsg.items.length);
   let show = 'none';
   if (r === 1) show = hasLyrics ? 'lyrics' : 'none';
   else if (r === 2) show = 'list';
-  else if (r === 3) show = hasLyrics ? 'lyrics' : hasArtist ? 'artist' : 'list';
-  else show = hasLyrics ? 'lyrics' : 'list';
+  else if (r === 3) show = hasArtist ? 'artist' : 'list';
+  else show = hasLyrics ? 'lyrics' : hasList ? 'list' : hasArtist ? 'artist' : 'list';
   const sig = show + '|' + (show === 'lyrics' ? st.key + JSON.stringify(lines).length : '')
     + '|' + (show === 'list' ? JSON.stringify(listMsg) + opt('grid', false) : '') + '|' + (show === 'artist' ? artistMsg.name : '');
   if (sig === rightSig) return;
@@ -335,7 +339,11 @@ function buildList() {
     d.querySelector('b').textContent = n.title || ''; d.querySelector('span').textContent = n.artist || '';
     box.appendChild(d);
   });
-  if (!items.length) { const d = document.createElement('div'); d.className = 'cap'; d.textContent = 'Nothing coming up that the player says'; box.appendChild(d); }
+  if (!items.length) {
+    const d = document.createElement('div'); d.className = 'empty';
+    d.textContent = (appNow === 'TIDAL' ? 'TIDAL shows what comes next only while its queue is open. ' : '') + 'Nothing coming up that the player shows yet.';
+    box.appendChild(d);
+  }
 }
 
 function buildArtist() {
@@ -423,36 +431,168 @@ function drawStrip(pos) {
       g.fillRect(i * bw + bw * 0.18, mid - h / 2, bw * 0.64, h);
     }
   } else if (mode === 1) {
-    // The bands come ~30 times a second, not quite evenly over the network. Each frame the bars
-    // rise quickly toward the last ones and FALL at a steady speed (full height in ~0.6 s, by
-    // the time between frames) -- a share per frame dropped them to half in a quarter second, so
-    // the tops were gone before they were seen. A cap holds each peak a moment, then falls.
-    const now = performance.now(), dt = Math.min(0.05, (now - (drawStrip.at || now)) / 1000); drawStrip.at = now;
-    const b = bands && now - bandsAt < 1500 ? bands : null, n = 32, bw = W / n, room = H - 6 * px1;
-    if (!shownBands) { shownBands = new Array(n).fill(0); capsAt = new Array(n).fill(0); capsHold = new Array(n).fill(0); }
-    g.fillStyle = tint;
-    for (let i = 0; i < n; i++) {
-      const target = b ? b[i] / 99 : 0.02, cur0 = shownBands[i];
-      const v = target > cur0 ? cur0 + (target - cur0) * Math.min(1, dt * 22) : Math.max(target, cur0 - dt * 1.7);
-      shownBands[i] = v;
-      if (v >= capsAt[i]) { capsAt[i] = v; capsHold[i] = 0.35; }
-      else if (capsHold[i] > 0) capsHold[i] -= dt;
-      else capsAt[i] = Math.max(v, capsAt[i] - dt * 0.9);
-      const h = Math.max(2 * px1, v * room), x = i * bw + bw * 0.15, w = bw * 0.7;
-      g.fillRect(x, H - 4 * px1 - h, w, h);
-      if (capsAt[i] > v + 0.02) g.fillRect(x, H - 4 * px1 - capsAt[i] * room - 2 * px1, w, 2 * px1);
-    }
-    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, H - 3 * px1, W, 3 * px1);
-    g.fillStyle = tint; g.fillRect(0, H - 3 * px1, px, 3 * px1);
+    visFrame(g, W, H, tint, st.len ? f : -1);
   } else {
     g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(0, mid - 3 * px1, W, 6 * px1);
     g.fillStyle = tint; g.fillRect(0, mid - 3 * px1, px, 6 * px1);
   }
+  if (mode === 1) return;   // the visualiser marks where the song is in its own way, as in the taskbar
   // the play head: a line through the waveform, and a dot you can always find
-  const y = mode === 1 ? H - 2 * px1 : mid, rdot = 7 * px1;
+  const y = mid, rdot = 7 * px1;
   if (mode === 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(px - px1, 4 * px1, 2 * px1, H - 8 * px1); }
   g.beginPath(); g.arc(Math.max(rdot, Math.min(W - rdot, px)), y, rdot, 0, Math.PI * 2);
   g.fillStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 6 * px1; g.fill(); g.shadowBlur = 0;
+}
+
+
+// ---- the taskbar's visualiser styles, drawn as the PC draws them (src\Vis.cs VisPainter): 0 bars,
+// 1 stereo, 2 line, 3 LED, 4 oscilloscope, 5 VU meter, 6 dots, 7 filled wave. The data comes ~30
+// times a second (bands, and per style the channels, the samples or the levels); every frame
+// (60) the bands glide toward the last ones -- quick up, falling at a steady speed.
+const vis = { b: null, l: null, r: null, s: null, vl: 0, vr: 0, at: 0,
+              sb: null, sl: null, sr: null, scope: null, led: [], caps: [], pkL: 0, pkR: 0, t: 0 };
+function glide(shown, target, dt) {
+  if (!target) return shown;
+  if (!shown || shown.length !== target.length) shown = new Array(target.length).fill(0);
+  for (let i = 0; i < target.length; i++) {
+    const v = target[i] / 99, c = shown[i];
+    shown[i] = v > c ? c + (v - c) * Math.min(1, dt * 22) : Math.max(v, c - dt * 1.7);
+  }
+  return shown;
+}
+function column(bands, i, n) {
+  if (!bands || !bands.length) return 0;
+  const ia = Math.floor(i * bands.length / n), iz = Math.max(ia + 1, Math.ceil((i + 1) * bands.length / n));
+  let v = 0; for (let k = ia; k < iz && k < bands.length; k++) v = Math.max(v, bands[k]); return v;
+}
+function rgba(c, a) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+  if (m) return 'rgba(' + parseInt(m[1], 16) + ',' + parseInt(m[2], 16) + ',' + parseInt(m[3], 16) + ',' + (a / 255) + ')';
+  const r = /rgba?\(([^,]+),([^,]+),([^,)]+)/.exec(c); return r ? 'rgba(' + r[1] + ',' + r[2] + ',' + r[3] + ',' + (a / 255) + ')' : c;
+}
+function headColour(c) {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+  if (!m) return 'rgba(240,255,255,0.94)';
+  const R = parseInt(m[1], 16), G = parseInt(m[2], 16), B = parseInt(m[3], 16);
+  if (R * 0.299 + G * 0.587 + B * 0.114 < 170) return 'rgba(255,255,255,0.94)';
+  const h = (hue(R, G, B) + 180) % 360, sat = 0.85, x = sat * (1 - Math.abs(h / 60 % 2 - 1)); let r = 0, gr = 0, bl = 0;
+  if (h < 60) { r = sat; gr = x; } else if (h < 120) { r = x; gr = sat; } else if (h < 180) { gr = sat; bl = x; }
+  else if (h < 240) { gr = x; bl = sat; } else if (h < 300) { r = x; bl = sat; } else { r = sat; bl = x; }
+  const mm = 1 - sat; return 'rgb(' + Math.round((r + mm) * 255) + ',' + Math.round((gr + mm) * 255) + ',' + Math.round((bl + mm) * 255) + ')';
+}
+function rrect(g, x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2); g.beginPath();
+  g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+}
+function visFrame(g, W, H, c, head) {
+  const now = performance.now(), dt = Math.min(0.05, (now - (vis.t || now)) / 1000); vis.t = now;
+  const fresh = now - vis.at < 1500;
+  vis.sb = glide(vis.sb, fresh ? vis.b : (vis.b || []).map(() => 0), dt);
+  vis.sl = glide(vis.sl, fresh ? vis.l : null, dt) || vis.sl; vis.sr = glide(vis.sr, fresh ? vis.r : null, dt) || vis.sr;
+  const style = opt('visStyle', 0), dens = opt('visDensity', 1), sens = opt('visSens', 1);
+  const k = H * 0.9 / 26, t = k, cy = H / 2, x0 = 0, x1 = W, gain = sens === 0 ? 0.7 : sens === 2 ? 1.45 : 1;
+  const bands = vis.sb, f60 = dt * 30;   // the PC's per-frame falls were made for ~30 frames a second
+  const headIdx = n => head < 0 ? -1 : Math.min(n - 1, Math.floor(head * n));
+  if (style === 5) {   // VU meter
+    const vg = sens === 0 ? 0.8 : sens === 2 ? 1.3 : 1;
+    const l = fresh ? Math.min(1, vis.vl / 99 * vg) : 0, r = fresh ? Math.min(1, vis.vr / 99 * vg) : 0;
+    vis.pkL = Math.max(l, vis.pkL - 0.008 * f60); vis.pkR = Math.max(r, vis.pkR - 0.008 * f60);
+    const w = x1 - x0;
+    for (let ch = 0; ch < 2; ch++) {
+      const v = ch === 0 ? l : r, pk = ch === 0 ? vis.pkL : vis.pkR, y = ch === 0 ? cy - 7 * k : cy + 2 * k;
+      g.fillStyle = rgba(c, 30); rrect(g, x0, y, w, 5 * k, 2 * k); g.fill();
+      if (v > 0.01) { const gr = g.createLinearGradient(x0, 0, x1, 0); gr.addColorStop(0, rgba(c, 150)); gr.addColorStop(1, rgba(c, 255)); g.fillStyle = gr; rrect(g, x0, y, Math.max(3 * k, w * v), 5 * k, 2 * k); g.fill(); }
+      g.fillStyle = 'rgba(255,255,255,0.94)'; g.fillRect(x0 + w * pk - k, y - k, 2 * k, 7 * k);
+    }
+    if (head >= 0) { g.fillStyle = headColour(c); g.fillRect(x0 + w * head - k, cy - 11 * k, 2 * k, 3 * k); }
+    return;
+  }
+  if (style === 4) {   // oscilloscope
+    const sm = fresh ? vis.s : null; if (!sm || sm.length < 16) return;
+    const sg = sens === 0 ? 0.4 : sens === 2 ? 0.85 : 0.6, n = Math.max(8, Math.floor((x1 - x0) / (3 * Math.max(1, t * 0.6))));
+    const len = sm.length / 2 | 0; let start = 0;
+    for (let i = 1; i < len; i++) if (sm[i - 1] < 0 && sm[i] >= 0) { start = i; break; }
+    if (!vis.scope || vis.scope.length !== n) vis.scope = new Array(n).fill(0);
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const a0 = start + Math.floor(i * len / n), a1 = Math.max(a0 + 1, start + Math.floor((i + 1) * len / n));
+      let sum = 0; for (let j = a0; j < a1 && j < sm.length; j++) sum += sm[j] / 100;
+      const v = Math.max(-1, Math.min(1, sum / (a1 - a0) * sg));
+      vis.scope[i] += (v - vis.scope[i]) * Math.min(1, 0.5 * f60);
+      const taper = Math.sin(Math.PI * i / (n - 1));
+      pts.push([x0 + (x1 - x0) * i / (n - 1), cy - vis.scope[i] * taper * 13 * k]);
+    }
+    g.lineJoin = 'round';
+    g.strokeStyle = rgba(c, 55); g.lineWidth = 4 * t; g.beginPath(); pts.forEach((p, i) => i ? g.lineTo(p[0], p[1]) : g.moveTo(p[0], p[1])); g.stroke();
+    g.strokeStyle = rgba(c, 235); g.lineWidth = 1.4 * t; g.stroke();
+    const hi = headIdx(n); if (hi >= 0) { g.fillStyle = headColour(c); g.beginPath(); g.arc(pts[hi][0], pts[hi][1], 3 * t, 0, Math.PI * 2); g.fill(); }
+    return;
+  }
+  if (!bands) return;
+  if (style === 2 || style === 7) {   // line / filled wave
+    const n = Math.max(6, Math.floor((x1 - x0) / (7 * t))), maxH = 26 * k, baseY = cy + 13 * k, pts = [];
+    for (let i = 0; i < n; i++) { const v = Math.min(1, column(bands, i, n) * gain); pts.push([x0 + (x1 - x0) * i / (n - 1), baseY - k - v * (maxH - 2 * k)]); }
+    const curve = () => { g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let i = 1; i < n; i++) { const p = pts[i - 1], q = pts[i]; g.quadraticCurveTo(p[0], p[1], (p[0] + q[0]) / 2, (p[1] + q[1]) / 2); } g.lineTo(pts[n - 1][0], pts[n - 1][1]); };
+    g.lineJoin = 'round';
+    if (style === 7) {
+      curve(); g.lineTo(x1, baseY); g.lineTo(x0, baseY); g.closePath();
+      const gr = g.createLinearGradient(0, baseY - maxH, 0, baseY); gr.addColorStop(0, rgba(c, 170)); gr.addColorStop(1, rgba(c, 10)); g.fillStyle = gr; g.fill();
+    } else { curve(); g.strokeStyle = rgba(c, 60); g.lineWidth = 4.5 * t; g.stroke(); }
+    curve(); g.strokeStyle = rgba(c, 235); g.lineWidth = 1.6 * t; g.stroke();
+    if (head >= 0) {
+      const hx = x0 + (x1 - x0) * head, i = Math.max(0, Math.min(n - 2, Math.floor((hx - x0) / (x1 - x0) * (n - 1))));
+      const tt = Math.max(0, Math.min(1, (hx - pts[i][0]) / Math.max(1, pts[i + 1][0] - pts[i][0])));
+      g.fillStyle = headColour(c); g.beginPath(); g.arc(hx, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * tt, 3 * t, 0, Math.PI * 2); g.fill();
+    }
+    return;
+  }
+  if (style === 3) {   // LED
+    const pitch = (dens === 0 ? 10 : dens === 2 ? 5 : 7) * t, n = Math.floor((x1 - x0) / pitch); if (n < 5) return;
+    if (vis.led.length !== n) vis.led = new Array(n).fill(0);
+    const bw = (x1 - x0) / n, blocks = 8, bh = 3 * k, gap = k, baseY = cy + 13 * k, hi = headIdx(n);
+    const peakC = (() => { const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c); return m ? 'rgb(' + Math.min(255, parseInt(m[1], 16) + 70) + ',' + Math.min(255, parseInt(m[2], 16) + 70) + ',' + Math.min(255, parseInt(m[3], 16) + 70) + ')' : '#fff'; })();
+    for (let i = 0; i < n; i++) {
+      const v = Math.min(1, column(bands, i, n) * gain), on = Math.round(v * blocks);
+      vis.led[i] = Math.max(on, vis.led[i] - 0.12 * f60); const top = Math.round(vis.led[i]);
+      const bx = x0 + i * bw, w = Math.max(2, bw * 0.7);
+      for (let b = 0; b < blocks; b++) {
+        g.fillStyle = b < on || (i === hi && b === 0) ? (i === hi ? headColour(c) : rgba(c, 235)) : b === top - 1 && top > on ? (i === hi ? headColour(c) : peakC) : rgba(c, 28);
+        g.fillRect(bx, baseY - (b + 1) * (bh + gap), w, bh);
+      }
+    }
+    return;
+  }
+  if (style === 6) {   // dots
+    const pitch = (dens === 0 ? 11 : dens === 2 ? 6 : 8) * t, n = Math.floor((x1 - x0) / pitch); if (n < 5) return;
+    const bw = (x1 - x0) / n, baseY = cy + 11 * k, hi = headIdx(n);
+    for (let i = 0; i < n; i++) {
+      const v = Math.min(1, column(bands, i, n) * gain), x = x0 + i * bw + bw / 2, y = baseY - v * 22 * k;
+      g.fillStyle = rgba(c, 45); g.beginPath(); g.arc(x, baseY, 1.5 * t, 0, Math.PI * 2); g.fill();
+      const rad = (2 + v * 1.2) * t; g.fillStyle = i === hi ? headColour(c) : rgba(c, 240); g.beginPath(); g.arc(x, y, rad, 0, Math.PI * 2); g.fill();
+    }
+    return;
+  }
+  // bars (0) and stereo (1)
+  const pitch = (dens === 0 ? 9 : dens === 2 ? 3.5 : 5.5) * t, n = Math.floor((x1 - x0) / pitch); if (n < 5) return;
+  const bw = (x1 - x0) / n, mirrored = style === 1, maxH = (mirrored ? 30 : 26) * k, baseY = cy + 13 * k, hi = headIdx(n);
+  let fill;
+  if (mirrored) { fill = g.createLinearGradient(0, cy - maxH / 2, 0, cy + maxH / 2); fill.addColorStop(0, rgba(c, 90)); fill.addColorStop(0.5, rgba(c, 235)); fill.addColorStop(1, rgba(c, 90)); }
+  else { fill = g.createLinearGradient(0, baseY - maxH, 0, baseY); fill.addColorStop(0, rgba(c, 230)); fill.addColorStop(1, rgba(c, 90)); }
+  if (vis.caps.length !== n) vis.caps = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const v = Math.min(1, column(bands, i, n) * gain), bh = Math.max(2 * t, v * maxH), bx = x0 + i * bw, bwi = Math.max(1, bw * 0.62);
+    let x = bx, y, h;
+    if (mirrored && vis.sl && vis.sr) {
+      const up = Math.max(t, Math.min(1, column(vis.sl, i, n) * gain) * maxH / 2), down = Math.max(t, Math.min(1, column(vis.sr, i, n) * gain) * maxH / 2);
+      y = cy - up; h = up + down;
+    } else if (mirrored) { y = cy - bh / 2; h = bh; } else { y = baseY - bh; h = bh; }
+    g.fillStyle = i === hi ? headColour(c) : fill; rrect(g, x, y, bwi, h, Math.min(2 * t, bwi / 2)); g.fill();
+    if (!mirrored) {
+      // a cap that jumps up with the bar and falls back slowly (as the full screen has it)
+      vis.caps[i] = Math.max(bh, vis.caps[i] - maxH * 0.012 * f60);
+      g.fillStyle = rgba(c, 220); g.fillRect(bx, baseY - vis.caps[i] - 3 * t, bwi, 1.5 * t);
+    }
+  }
 }
 
 // ---- the living background
