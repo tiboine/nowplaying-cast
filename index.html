@@ -152,7 +152,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01a';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01b';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -739,12 +739,13 @@ function remote(cmd) {
   try { if (senderId) context.sendCustomMessage(NS, senderId, { type: 'remote', cmd: cmd }); } catch (x) { console.log(x); }
 }
 const MT = cast.framework.messages.MessageType;
-pm.setMessageInterceptor(MT.PAUSE, r => { remote('pause'); return r; });
-pm.setMessageInterceptor(MT.PLAY, r => { remote('play'); return r; });
-pm.setMessageInterceptor(MT.QUEUE_UPDATE, r => { if (r && r.jump > 0) remote('next'); else if (r && r.jump < 0) remote('prev'); return null; });
-pm.setMessageInterceptor(MT.QUEUE_NEXT, r => { remote('next'); return null; });
-pm.setMessageInterceptor(MT.QUEUE_PREV, r => { remote('prev'); return null; });
-pm.setMessageInterceptor(MT.SEEK, r => { remote('seek'); return null; });
+// Each on its own: a type this framework does not know throws, and one throw must not take the
+// whole page down (QUEUE_NEXT did, in a browser). Next / previous come as QUEUE_UPDATE's jump.
+function intercept(type, fn) { try { if (type) pm.setMessageInterceptor(type, fn); } catch (x) { console.log('intercept', x); } }
+intercept(MT.PAUSE, r => { remote('pause'); return r; });
+intercept(MT.PLAY, r => { remote('play'); return r; });
+intercept(MT.QUEUE_UPDATE, r => { if (r && r.jump > 0) remote('next'); else if (r && r.jump < 0) remote('prev'); return null; });
+intercept(MT.SEEK, r => { remote('seek'); return null; });
 let quietUp = false, quietKey = null, quietArt = null;
 function quietMeta(m) {
   const md = new cast.framework.messages.MusicTrackMediaMetadata();
