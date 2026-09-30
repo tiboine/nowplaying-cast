@@ -15,13 +15,16 @@
   html, body { margin: 0; height: 100%; background: #07070a; color: #fff;
     font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
   body { overflow: hidden; position: relative; }
-  /* The living cover: the picture blown up and blurred behind everything, drifting slowly. */
-  #bg { position: absolute; inset: -12%; background-size: cover; background-position: center;
-    filter: blur(60px) saturate(1.35) brightness(0.55); transform: scale(1.1);
-    animation: drift 38s ease-in-out infinite alternate; transition: background-image 1.2s ease; }
-  @keyframes drift { from { transform: scale(1.1) translate(-2%, -1%) rotate(-1deg); }
-                     to   { transform: scale(1.22) translate(2%, 1.5%) rotate(1.2deg); } }
-  #veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(0,0,0,0.05), rgba(0,0,0,0.55) 75%); }
+  /* The living cover: a small, pre-blurred copy of the cover stretched far past the screen,
+     drifting, zooming and turning on slow waves, with three colour clouds from it floating over.
+     Only transforms change per frame: cheap for the TV's GPU. Two layers, so a new cover fades in. */
+  .bg { position: absolute; left: -20%; top: -20%; width: 140%; height: 140%; opacity: 0;
+    transition: opacity 1.6s ease; will-change: transform, opacity; }
+  .bg.on { opacity: 1; }
+  .blob { position: absolute; width: 70vw; height: 70vw; border-radius: 50%; left: 15vw; top: -10vw;
+    opacity: 0; transition: opacity 2s ease, background 2s ease; mix-blend-mode: screen; will-change: transform; }
+  .blob.on { opacity: 0.32; }
+  #veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(0,0,0,0.12), rgba(0,0,0,0.62) 78%); }
   #stage { position: absolute; inset: 0; display: grid; grid-template-columns: 38% 62%; align-items: center; }
   /* Left: the sharp cover, its title and the time. */
   #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: 7vw; }
@@ -30,11 +33,11 @@
   #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; max-width: 28vw; line-height: 1.1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; max-width: 28vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; }
+  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; min-height: 1.2vw; }
   #bar { width: 26vw; height: 0.35vw; background: rgba(255,255,255,0.18); border-radius: 1vw; margin-top: 2vw; overflow: hidden; }
   #fill { height: 100%; width: 0; background: var(--tint); border-radius: 1vw; }
   #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.6vw; }
-  /* Right: the lyrics, the sung line bright and a third down; or, without lyrics, what comes next. */
+  /* Right: the lyrics, the sung line bright and a third down; or what comes next. */
   #right { height: 80vh; position: relative; overflow: hidden; margin-right: 6vw;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%); }
@@ -43,7 +46,7 @@
     transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(0.06vw); }
   .line.now { opacity: 1; color: var(--sung, #fff); filter: none; }
   .line.near { opacity: 0.5; filter: none; }
-  #next { position: absolute; left: 0; right: 0; top: 0; }
+  #next { position: absolute; left: 0; right: 0; top: 16vh; }
   #nextHead { font-size: 1vw; letter-spacing: 0.3em; opacity: 0.55; margin-bottom: 1.4vw; }
   .nx { display: flex; align-items: center; margin-bottom: 1.2vw; }
   .nx .a { width: 4.4vw; height: 4.4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
@@ -53,14 +56,29 @@
   #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 2vw; letter-spacing: 0.4em; opacity: 0.5; }
   .hidden { display: none !important; }
+  .gone { visibility: hidden; }
   /* Whose music it is: the player's mark and name, top left. */
   #badge { position: absolute; left: 4vw; top: 5vh; display: flex; align-items: center; gap: 0.8vw;
     font-size: 1.05vw; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.75; }
   #badge img { width: 2.2vw; height: 2.2vw; object-fit: contain; filter: drop-shadow(0 0.2vw 0.4vw rgba(0,0,0,0.5)); }
+  /* The clock, top right. */
+  #clock { position: absolute; right: 4vw; top: 4.4vh; font-size: 2vw; font-weight: 300; opacity: 0.8; letter-spacing: 0.04em; }
+  /* What comes next, in the corner in a song's last 20 s (while the lyrics show). */
+  #corner { position: absolute; right: 4vw; bottom: 6vh; display: flex; align-items: center; gap: 1vw;
+    padding: 0.9vw 1.4vw 0.9vw 0.9vw; border-radius: 1vw; background: rgba(0,0,0,0.38);
+    transform: translateY(14vh); opacity: 0; transition: transform 0.6s cubic-bezier(.2,.8,.2,1), opacity 0.5s; max-width: 30vw; }
+  #corner.on { transform: none; opacity: 1; }
+  #corner .a { width: 4vw; height: 4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
+  #corner .h { font-size: 0.8vw; letter-spacing: 0.3em; opacity: 0.6; }
+  #corner b { display: block; font-size: 1.3vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #corner span { display: block; font-size: 1vw; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #corner .t { min-width: 0; }
 </style>
 </head>
 <body>
-<div id="bg"></div><div id="veil"></div>
+<canvas class="bg" id="bgA" width="320" height="180"></canvas><canvas class="bg" id="bgB" width="320" height="180"></canvas>
+<div class="blob" id="b0"></div><div class="blob" id="b1"></div><div class="blob" id="b2"></div>
+<div id="veil"></div>
 <div id="stage" class="hidden">
   <div id="left">
     <div id="from"></div>
@@ -73,38 +91,45 @@
   <div id="right"><div id="lines"></div><div id="next" class="hidden"><div id="nextHead">UP NEXT</div><div id="nextList"></div></div></div>
 </div>
 <div id="badge" class="hidden"><img id="logo" alt=""><span id="appname"></span></div>
+<div id="clock" class="hidden"></div>
+<div id="corner"><div class="a"></div><div class="t"><div class="h">UP NEXT</div><b></b><span></span></div></div>
 <div id="idle">NOWPLAYING</div>
 <script>
 /*
  * NowPlaying on the TV. The PC's app (NowPlaying, Windows) connects to this receiver and sends
  * JSON on the namespace below, whenever something changes and every few seconds:
- *   { type: "state", title, artist, album, from, app, logo (data: URL), art (https URL or data: URL), tint "#rrggbb",
- *     sung "#rrggbb", pos (ms), len (ms), playing (bool),
- *     lines: [{ t: ms, x: "text" }] | null, next: [{ title, artist, art }] }
+ *   { type: "state", title, artist, from, app, logo (data: URL), art (https URL or data: URL),
+ *     tint "#rrggbb", sung "#rrggbb", pos (ms), len (ms), playing (bool),
+ *     lines: [{ t: ms, x: "text" }] | null, next: [{ title, artist, art }],
+ *     opts: { right: 0 lyrics else up next | 1 lyrics only | 2 up next only, corner, logo, from,
+ *             bar, clock, calm } }
  * Between messages the position runs on here, so the lyrics and the bar move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
 const $ = id => document.getElementById(id);
-let st = null, at = 0, lastLines = null, cur = -2;
+let st = null, at = 0, lastLines = null, cur = -2, opts = {}, artNow = null, bgFront = 'bgA';
 
 function fmt(ms) { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+function opt(k, dflt) { return opts[k] === undefined ? dflt : opts[k]; }
 
 function apply(m) {
   if (m.type !== 'state') return;
   const fresh = !st || st.title !== m.title || st.artist !== m.artist;
-  st = m; at = performance.now();
+  st = m; at = performance.now(); opts = m.opts || {};
   $('idle').classList.add('hidden'); $('stage').classList.remove('hidden');
   document.documentElement.style.setProperty('--tint', m.tint || '#7a9cff');
   document.documentElement.style.setProperty('--sung', m.sung || '#fff');
   $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
-  $('from').textContent = m.from || '';
-  if (m.logo) { if ($('logo').src !== m.logo) $('logo').src = m.logo; }
+  $('from').textContent = opt('from', true) ? (m.from || '') : '';
+  if (m.logo && $('logo').src !== m.logo) $('logo').src = m.logo;
   $('logo').classList.toggle('hidden', !m.logo);
   $('appname').textContent = m.app || '';
-  $('badge').classList.toggle('hidden', !m.logo && !m.app);
-  if (m.art) { const u = 'url("' + m.art + '")'; $('cover').style.backgroundImage = u; $('bg').style.backgroundImage = u; }
+  $('badge').classList.toggle('hidden', !opt('logo', true) || (!m.logo && !m.app));
+  $('bar').classList.toggle('gone', !opt('bar', true)); $('times').classList.toggle('gone', !opt('bar', true));
+  $('clock').classList.toggle('hidden', !opt('clock', false));
+  if (m.art && m.art !== artNow) { artNow = m.art; $('cover').style.backgroundImage = 'url("' + m.art + '")'; backdrop(m.art); }
   if (fresh) { $('cover').style.transform = 'scale(0.96)'; setTimeout(() => $('cover').style.transform = 'scale(1)', 30); }
-  const key = JSON.stringify(m.lines || null);
+  const key = JSON.stringify(m.lines || null) + '|' + opt('right', 0);
   if (key !== lastLines) { lastLines = key; build(m.lines); cur = -2; }
   const nl = $('nextList'); nl.innerHTML = '';
   (m.next || []).slice(0, 6).forEach(n => {
@@ -114,25 +139,99 @@ function apply(m) {
     d.querySelector('b').textContent = n.title || ''; d.querySelector('span').textContent = n.artist || '';
     nl.appendChild(d);
   });
+  const n0 = (m.next || [])[0], c = $('corner');
+  c.querySelector('b').textContent = n0 ? n0.title || '' : '';
+  c.querySelector('span').textContent = n0 ? n0.artist || '' : '';
+  c.querySelector('.a').style.backgroundImage = n0 && n0.art ? 'url("' + n0.art + '")' : '';
 }
 
 function build(lines) {
   const box = $('lines'); box.innerHTML = '';
-  const has = lines && lines.length > 0;
-  $('next').classList.toggle('hidden', has);
+  const right = opt('right', 0);
+  const has = lines && lines.length > 0 && right !== 2;
+  $('next').classList.toggle('hidden', has || right === 1);
   box.classList.toggle('hidden', !has);
   if (!has) return;
-  lines.forEach(l => { const d = document.createElement('div'); d.className = 'line'; d.textContent = l.x || ' '; box.appendChild(d); });
+  lines.forEach(l => { const d = document.createElement('div'); d.className = 'line'; d.textContent = l.x || ' '; box.appendChild(d); });
 }
 
-function tick() {
+// ---- the living background
+// The cover drawn once, small and blurred, into the back layer; the layers swap with a fade.
+// Its three most colourful colours become the clouds.
+function backdrop(url) {
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    const back = bgFront === 'bgA' ? 'bgB' : 'bgA', cv = $(back), g = cv.getContext('2d');
+    g.filter = 'blur(10px) saturate(1.4) brightness(0.62)';
+    g.drawImage(img, -30, -30, cv.width + 60, cv.height + 60);
+    g.filter = 'none';
+    cv.classList.add('on'); $(bgFront).classList.remove('on'); bgFront = back;
+    try { clouds(img); } catch (x) { console.log(x); }   // a picture from elsewhere without CORS cannot be read: no clouds
+  };
+  // A host that does not allow CORS refuses the picture outright when asked for it that way:
+  // asked again plainly, it still draws (only the clouds, which read its pixels, are left out).
+  img.onerror = () => { if (img.crossOrigin) { img.crossOrigin = null; img.removeAttribute('crossorigin'); img.src = url + (url.indexOf('data:') === 0 ? '' : ''); } };
+  img.src = url;
+}
+
+function clouds(img) {
+  const c = document.createElement('canvas'); c.width = c.height = 12;
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0, 12, 12);
+  const d = g.getImageData(0, 0, 12, 12).data, picks = [];
+  const cand = [];
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i], gg = d[i + 1], b = d[i + 2], mx = Math.max(r, gg, b), mn = Math.min(r, gg, b);
+    const s = mx ? (mx - mn) / mx : 0;
+    cand.push({ r, g: gg, b, score: s * (0.4 + mx / 255), hue: hue(r, gg, b) });
+  }
+  cand.sort((a, b) => b.score - a.score);
+  for (const k of cand) {
+    if (picks.length >= 3) break;
+    if (picks.every(p => Math.min(Math.abs(p.hue - k.hue), 360 - Math.abs(p.hue - k.hue)) > 30)) picks.push(k);
+  }
+  while (picks.length < 3) picks.push(picks[0] || { r: 120, g: 140, b: 255 });
+  picks.forEach((p, i) => {
+    const e = $('b' + i);
+    e.style.background = 'radial-gradient(circle, rgba(' + p.r + ',' + p.g + ',' + p.b + ',0.9) 0%, rgba(' + p.r + ',' + p.g + ',' + p.b + ',0) 68%)';
+    e.classList.add('on');
+  });
+}
+
+function hue(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+  if (!d) return 0;
+  let h = mx === r ? (g - b) / d : mx === g ? 2 + (b - r) / d : 4 + (r - g) / d;
+  return (h * 60 + 360) % 360;
+}
+
+function drift(now) {
+  const t = now / 1000, calm = opt('calm', false);
+  const bgT = calm ? 'scale(1.05)'
+    : 'translate(' + (Math.sin(t / 23) * 3.5) + '%,' + (Math.cos(t / 29) * 3) + '%) scale(' + (1.12 + 0.07 * Math.sin(t / 31)) + ') rotate(' + (Math.sin(t / 37) * 4) + 'deg)';
+  $('bgA').style.transform = bgT; $('bgB').style.transform = bgT;
+  for (let i = 0; i < 3; i++) {
+    const e = $('b' + i);
+    if (calm) { e.style.opacity = '0'; continue; }
+    e.style.opacity = '';
+    const p = [17, 23, 29][i], q = [19, 27, 33][i], o = i * 2.1;
+    e.style.transform = 'translate(' + (Math.sin(t / p + o) * 32 - 10 + i * 12) + 'vw,' + (Math.cos(t / q + o) * 22 + i * 10) + 'vh) scale(' + (0.9 + 0.2 * Math.sin(t / (p + 5) + o)) + ')';
+  }
+}
+
+function tick(now) {
   requestAnimationFrame(tick);
+  drift(now || performance.now());
   if (!st) return;
   const pos = Math.min(st.len || 0, st.pos + (st.playing ? performance.now() - at : 0));
   $('fill').style.width = st.len ? (100 * pos / st.len) + '%' : '0';
   $('el').textContent = fmt(pos); $('left_').textContent = '−' + fmt((st.len || 0) - pos);
+  // Up next in the corner: the last 20 s, while the lyrics show and something is coming.
+  const lyricsShow = !$('lines').classList.contains('hidden');
+  const n0 = (st.next || [])[0];
+  $('corner').classList.toggle('on', !!(opt('corner', true) && lyricsShow && n0 && st.len && st.len - pos < 20000 && st.len - pos > 500));
   const lines = st.lines;
-  if (!lines || !lines.length) return;
+  if (!lines || !lines.length || !lyricsShow) return;
   let i = -1;
   for (let k = 0; k < lines.length; k++) if (lines[k].t <= pos + 250) i = k; else break;
   if (i === cur) return;
@@ -144,6 +243,12 @@ function tick() {
   box.style.transform = 'translateY(' + (-Math.max(0, y)) + 'px)';
 }
 requestAnimationFrame(tick);
+
+function clock() {
+  const d = new Date();
+  $('clock').textContent = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+clock(); setInterval(clock, 5000);
 
 const context = cast.framework.CastReceiverContext.getInstance();
 let told = false;
