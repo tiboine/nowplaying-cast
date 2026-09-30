@@ -53,6 +53,10 @@
   #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 2vw; letter-spacing: 0.4em; opacity: 0.5; }
   .hidden { display: none !important; }
+  /* Whose music it is: the player's mark and name, top left. */
+  #badge { position: absolute; left: 4vw; top: 5vh; display: flex; align-items: center; gap: 0.8vw;
+    font-size: 1.05vw; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.75; }
+  #badge img { width: 2.2vw; height: 2.2vw; object-fit: contain; filter: drop-shadow(0 0.2vw 0.4vw rgba(0,0,0,0.5)); }
 </style>
 </head>
 <body>
@@ -68,12 +72,13 @@
   </div>
   <div id="right"><div id="lines"></div><div id="next" class="hidden"><div id="nextHead">UP NEXT</div><div id="nextList"></div></div></div>
 </div>
+<div id="badge" class="hidden"><img id="logo" alt=""><span id="appname"></span></div>
 <div id="idle">NOWPLAYING</div>
 <script>
 /*
  * NowPlaying on the TV. The PC's app (NowPlaying, Windows) connects to this receiver and sends
  * JSON on the namespace below, whenever something changes and every few seconds:
- *   { type: "state", title, artist, album, from, art (https URL or data: URL), tint "#rrggbb",
+ *   { type: "state", title, artist, album, from, app, logo (data: URL), art (https URL or data: URL), tint "#rrggbb",
  *     sung "#rrggbb", pos (ms), len (ms), playing (bool),
  *     lines: [{ t: ms, x: "text" }] | null, next: [{ title, artist, art }] }
  * Between messages the position runs on here, so the lyrics and the bar move smoothly.
@@ -93,6 +98,10 @@ function apply(m) {
   document.documentElement.style.setProperty('--sung', m.sung || '#fff');
   $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
   $('from').textContent = m.from || '';
+  if (m.logo) { if ($('logo').src !== m.logo) $('logo').src = m.logo; }
+  $('logo').classList.toggle('hidden', !m.logo);
+  $('appname').textContent = m.app || '';
+  $('badge').classList.toggle('hidden', !m.logo && !m.app);
   if (m.art) { const u = 'url("' + m.art + '")'; $('cover').style.backgroundImage = u; $('bg').style.backgroundImage = u; }
   if (fresh) { $('cover').style.transform = 'scale(0.96)'; setTimeout(() => $('cover').style.transform = 'scale(1)', 30); }
   const key = JSON.stringify(m.lines || null);
