@@ -152,6 +152,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
+const PAGE = '2026-09-30b';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -757,7 +758,7 @@ function measures() {
   return { type: 'info', iw: innerWidth, ih: innerHeight, cw: document.documentElement.clientWidth,
     ch: document.documentElement.clientHeight, sw: screen.width, sh: screen.height, aw: screen.availWidth,
     ah: screen.availHeight, dpr: devicePixelRatio, vs: vv ? vv.scale : null, vw: vv ? vv.width : null,
-    ua: navigator.userAgent, awake: awakeHow.join(', ') };
+    ua: navigator.userAgent, awake: awakeHow.join(', '), page: PAGE };
 }
 // And if the screen still shows more than the page was laid out for (the visual viewport wider
 // than the layout one), the whole page is scaled up from the top-left corner to fill it.
