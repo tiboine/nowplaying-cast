@@ -44,7 +44,11 @@
   #lines { position: absolute; left: 0; right: 0; top: 0; transition: transform 0.55s cubic-bezier(.25,.8,.25,1); }
   .line { font-size: 2.6vw; font-weight: 700; line-height: 1.25; padding: 0.55vw 0; opacity: 0.28;
     transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(0.06vw); }
-  .line.now { opacity: 1; color: var(--sung, #fff); filter: none; }
+  .line.now { opacity: 1; filter: none; }
+  /* Karaoke, as the full screen: each word fills with the sung colour as it is sung (--p), the
+     part not yet sung a dim white; sung words stay coloured. */
+  .line.now .w { background-image: linear-gradient(90deg, var(--sung, #fff) calc(var(--p, 0%) - 8%), rgba(255,255,255,0.41) var(--p, 0%));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
   .line.near { opacity: 0.5; filter: none; }
   #next { position: absolute; left: 0; right: 0; top: 16vh; }
   #nextHead { font-size: 1vw; letter-spacing: 0.3em; opacity: 0.55; margin-bottom: 1.4vw; }
@@ -146,13 +150,49 @@ function apply(m) {
 }
 
 function build(lines) {
-  const box = $('lines'); box.innerHTML = '';
+  const box = $('lines'); box.innerHTML = ''; rows = [];
   const right = opt('right', 0);
   const has = lines && lines.length > 0 && right !== 2;
   $('next').classList.toggle('hidden', has || right === 1);
   box.classList.toggle('hidden', !has);
   if (!has) return;
-  lines.forEach(l => { const d = document.createElement('div'); d.className = 'line'; d.textContent = l.x || ' '; box.appendChild(d); });
+  rows = lines.map((l, i) => {
+    const d = document.createElement('div'); d.className = 'line';
+    const end = i + 1 < lines.length ? lines[i + 1].t : l.t + 6000;
+    const words = wordsOf(l, end);
+    if (!words.length) d.textContent = l.x || ' ';
+    words.forEach((w, k) => {
+      if (k > 0 && w.space) d.appendChild(document.createTextNode(' '));
+      const sp = document.createElement('span'); sp.className = 'w'; sp.textContent = w.x; d.appendChild(sp);
+      w.el = sp;
+    });
+    box.appendChild(d);
+    return words;
+  });
+}
+
+// A line's words, each with the time it is sung from and to -- the word times when the lyrics
+// carry them, else the line's time shared by the words' lengths (up to the next line, but not
+// slower than a plain singing pace). The same sums as the full screen on the PC.
+let rows = [];
+function wordsOf(l, end) {
+  const out = [], timed = l.w;
+  if (timed && timed.length && timed[0].t >= l.t - 2000 && timed[0].t <= end) {
+    for (let i = 0; i < timed.length; i++) {
+      const t = timed[i].x || '';
+      if (!t.trim()) continue;   // an end mark
+      const to = i + 1 < timed.length ? timed[i + 1].t : Math.min(end, timed[i].t + 700);
+      out.push({ x: t.trim(), from: timed[i].t, to: Math.max(timed[i].t + 1, to), space: /^\s/.test(t) || out.length > 0 && /\s$/.test(timed[i - 1].x || '') });
+    }
+    return out;
+  }
+  const words = (l.x || '').split(' ').filter(w => w.length);
+  const natural = (l.x || '').length * 70 + 400;
+  const span = Math.max(400, Math.min((end - l.t) * 0.85, natural * 1.2));
+  const total = words.reduce((n, w) => n + w.length + 2, 0);
+  let at = 0;
+  words.forEach(w => { const w0 = at; at += w.length + 2; out.push({ x: w, from: l.t + span * w0 / total, to: l.t + span * at / total, space: true }); });
+  return out;
 }
 
 // ---- the living background
@@ -234,6 +274,11 @@ function tick(now) {
   if (!lines || !lines.length || !lyricsShow) return;
   let i = -1;
   for (let k = 0; k < lines.length; k++) if (lines[k].t <= pos + 250) i = k; else break;
+  // The sweep through the sung line's words, 250 ms ahead as the lines are.
+  if (i >= 0 && rows[i]) rows[i].forEach(w => {
+    const p = Math.max(0, Math.min(1, (pos + 250 - w.from) / (w.to - w.from)));
+    if (w.p !== p) { w.p = p; w.el.style.setProperty('--p', (p * 108) + '%'); }
+  });
   if (i === cur) return;
   cur = i;
   const box = $('lines'), kids = box.children;
