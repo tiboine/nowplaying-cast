@@ -152,7 +152,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01b';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01c';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -735,8 +735,28 @@ const quiet = document.createElement('audio'); quiet.style.display = 'none'; doc
 pm.setMediaElement(quiet);
 let SILENCE = 'https://tiboine.github.io/nowplaying-cast/silence.wav';
 try { if (location.protocol === 'https:') SILENCE = new URL('silence.wav', location.href).href; } catch (x) { }
-function remote(cmd) {
-  try { if (senderId) context.sendCustomMessage(NS, senderId, { type: 'remote', cmd: cmd }); } catch (x) { console.log(x); }
+function remote(cmd, extra) {
+  const m = { type: 'remote', cmd: cmd };
+  if (extra) for (const k in extra) m[k] = extra[k];
+  try { if (senderId) context.sendCustomMessage(NS, senderId, m); } catch (x) { console.log(x); }
+}
+
+// The silence is as long as the SONG (2.36.1) and stands where the song stands: the TV's own
+// player menu then shows the real track's length and time, not a 20-second clip. Made here as a
+// WAV in memory (8 kHz, 8 bits, one channel: 8 kB a second; at most 30 minutes).
+let silenceUrl = null, silenceLen = 0;
+function silenceFor(ms) {
+  const secs = Math.max(20, Math.min(1800, Math.ceil((ms || 0) / 1000) + 2));
+  if (silenceUrl && silenceLen === secs) return silenceUrl;
+  const n = secs * 8000, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
+  const w = (o, t) => { for (let i = 0; i < t.length; i++) v.setUint8(o + i, t.charCodeAt(i)); };
+  w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVE'); w(12, 'fmt '); v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 8000, true); v.setUint32(28, 8000, true);
+  v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+  new Uint8Array(buf, 44).fill(128);
+  if (silenceUrl) URL.revokeObjectURL(silenceUrl);
+  silenceUrl = URL.createObjectURL(new Blob([buf], { type: 'audio/wav' })); silenceLen = secs;
+  return silenceUrl;
 }
 const MT = cast.framework.messages.MessageType;
 // Each on its own: a type this framework does not know throws, and one throw must not take the
@@ -745,36 +765,55 @@ function intercept(type, fn) { try { if (type) pm.setMessageInterceptor(type, fn
 intercept(MT.PAUSE, r => { remote('pause'); return r; });
 intercept(MT.PLAY, r => { remote('play'); return r; });
 intercept(MT.QUEUE_UPDATE, r => { if (r && r.jump > 0) remote('next'); else if (r && r.jump < 0) remote('prev'); return null; });
-intercept(MT.SEEK, r => { remote('seek'); return null; });
-let quietUp = false, quietKey = null, quietArt = null;
+// A seek in the TV's menu seeks the real song (as a fraction of it); what came is logged, to learn
+// what the remote's left / right send.
+intercept(MT.SEEK, r => {
+  if (r && st && st.len) {
+    const t = r.currentTime !== undefined ? r.currentTime : null;
+    if (t !== null) remote('seek', { f: Math.max(0, Math.min(1, t * 1000 / st.len)), t: t, rel: r.relativeTime });
+    else if (r.relativeTime !== undefined) remote('seek', { f: Math.max(0, Math.min(1, (songPos() + r.relativeTime * 1000) / st.len)), rel: r.relativeTime });
+  }
+  return r;
+});
+let quietUp = false, quietKey = null, quietArt = null, quietLen = 0;
 function quietMeta(m) {
   const md = new cast.framework.messages.MusicTrackMediaMetadata();
   md.title = m.title || ''; md.artist = m.artist || '';
   if (artNow && artNow.indexOf('https:') === 0) md.images = [new cast.framework.messages.Image(artNow)];
   return md;
 }
+function songPos() { return st ? Math.min(st.len || 0, st.pos + (st.playing ? performance.now() - at : 0)) : 0; }
 function quietLoad() {
   if (!st) return;
   const req = new cast.framework.messages.LoadRequestData();
   const mi = new cast.framework.messages.MediaInformation();
-  mi.contentId = SILENCE; mi.contentUrl = SILENCE; mi.contentType = 'audio/wav';
+  let url = SILENCE;
+  try { if (st.len > 0) url = silenceFor(st.len); } catch (x) { url = SILENCE; }
+  mi.contentId = url; mi.contentUrl = url; mi.contentType = 'audio/wav';
+  if (st.len > 0) mi.duration = st.len / 1000;
+  req.currentTime = songPos() / 1000;
   mi.streamType = cast.framework.messages.StreamType.BUFFERED;
   mi.metadata = quietMeta(st);
   req.media = mi; req.autoplay = !!st.playing;
-  quietUp = true; quietKey = st.key; quietArt = artNow;
+  quietUp = true; quietKey = st.key; quietArt = artNow; quietLen = st.len;
   pm.load(req).catch(x => console.log('quiet load', x));
 }
 // Silence ends every 20 s: again, at once.
-pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, () => { if (quietUp) quietLoad(); });
+pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, () => { if (quietUp) quietLoad(); });   // the song's end, or the 20 s fallback's
 // The PC's state is the truth: the TV's "media" plays and pauses with it, and wears its words.
 function quietFollow(m) {
   if (!quietUp) { quietLoad(); return; }
+  // Another song (another length): loaded again, as long as it and where it stands.
+  if (m.key !== quietKey && m.len !== quietLen) { quietLoad(); return; }
   try {
     const mi = pm.getMediaInformation();
     if (mi && (m.key !== quietKey || artNow !== quietArt)) { quietKey = m.key; quietArt = artNow; mi.metadata = quietMeta(m); pm.setMediaInformation(mi, true); }
     const ps = pm.getPlayerState(), P = cast.framework.messages.PlayerState;
     if (m.playing && ps === P.PAUSED) pm.play();
     else if (!m.playing && ps === P.PLAYING) pm.pause();
+    // Kept where the song is (a seek on the PC, a slow start): more than 2 s off, it is moved.
+    const qt = pm.getCurrentTimeSec ? pm.getCurrentTimeSec() : quiet.currentTime;
+    if (m.len > 0 && Math.abs(qt * 1000 - songPos()) > 2000) pm.seek(songPos() / 1000);
   } catch (x) { console.log(x); }
 }
 context.start(options);
