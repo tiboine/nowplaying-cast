@@ -137,6 +137,18 @@ options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
 options.disableIdleTimeout = true;   // a now-playing screen: it stays while the PC talks to it
 options.skipPlayersLoad = true;      // no media player of its own
 context.start(options);
+
+// What this screen really is (a Google TV Streamer drew us on ~80 % of it): told to the PC, which logs it.
+function measures() {
+  const vv = window.visualViewport;
+  return { type: 'info', iw: innerWidth, ih: innerHeight, cw: document.documentElement.clientWidth,
+    ch: document.documentElement.clientHeight, sw: screen.width, sh: screen.height, aw: screen.availWidth,
+    ah: screen.availHeight, dpr: devicePixelRatio, vs: vv ? vv.scale : null, vw: vv ? vv.width : null,
+    ua: navigator.userAgent };
+}
+context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, e => {
+  setTimeout(() => { try { context.sendCustomMessage(NS, e.senderId, measures()); } catch (x) { console.log(x); } }, 500);
+});
 </script>
 </body>
 </html>
