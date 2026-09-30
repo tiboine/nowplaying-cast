@@ -106,6 +106,10 @@
     padding: 0.9vw 1.4vw 0.9vw 0.9vw; border-radius: 1vw; background: rgba(0,0,0,0.38);
     transform: translateY(14vh); opacity: 0; transition: transform 0.6s cubic-bezier(.2,.8,.2,1), opacity 0.5s; max-width: 30vw; }
   #corner.on { transform: none; opacity: 1; }
+  #corner.over { background: rgba(0,0,0,0.66); -webkit-backdrop-filter: blur(1.2vw); backdrop-filter: blur(1.2vw); box-shadow: 0 1vw 3vw rgba(0,0,0,0.5); }
+  /* words under the covers, when chosen off */
+  .noinfo .t { display: none; }
+  #title.gone2, #artist.gone2 { display: none; }
   #corner .a { width: 4vw; height: 4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
   #corner .h { font-size: 0.8vw; letter-spacing: 0.3em; opacity: 0.6; }
   #corner b { display: block; font-size: 1.3vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -152,7 +156,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01e';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01f';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -218,6 +222,7 @@ function state(m) {
   badge();
   $('strip').classList.toggle('gone', !opt('bar', true)); $('times').classList.toggle('gone', !opt('bar', true));
   $('clock').classList.toggle('hidden', !opt('clock', false));
+  $('title').classList.toggle('gone2', !opt('trackInfo', true)); $('artist').classList.toggle('gone2', !opt('trackInfo', true));
   right();
   layout();
   quietFollow(m);
@@ -335,7 +340,7 @@ function buildList() {
   let items = m.items || [], from = 0;
   if (!grid) from = m.mode === 1 ? Math.max(0, m.at - 1) : 0;
   const count = grid ? 32 : 7;
-  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - gridCols * 4, Math.floor(m.at / gridCols) * gridCols - gridCols));
+  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - gridCols * opt('gridRows', 4), Math.floor(m.at / gridCols) * gridCols - gridCols));
   items.slice(from, from + count).forEach((n, k) => {
     const i = from + k, d = document.createElement('div');
     d.className = (grid ? 'cell' : 'nx') + (m.mode === 1 && i === m.at ? ' now' : '');
@@ -398,10 +403,12 @@ function gridFit(cv, vw) {
   const cell = box.querySelector('.cell'); if (!cell) return;
   // Four rows, the bottom row's artists ending on the line of the times under the strip (the left
   // column's last words; the times never glide, so their box is where they stand).
-  const ROWS = 4;
+  const ROWS = opt('gridRows', 4);
+  box.classList.toggle('noinfo', !opt('gridInfo', true));
   const foot = $('times').getBoundingClientRect().bottom;
   const b = cell.querySelector('b'), sp = cell.querySelector('span');
-  const mt = 0.5 * vw, bh = b.offsetHeight, capH = mt + bh + sp.offsetHeight, gap = 1.4 * vw, gapc = 1.2 * vw;
+  const info = opt('gridInfo', true);
+  const mt = info ? 0.5 * vw : 0, bh = info ? b.offsetHeight : 0, capH = info ? mt + bh + sp.offsetHeight : 0, gap = 1.4 * vw, gapc = 1.2 * vw;
   // The bottom row's LAST line (its artist) ends on the title's foot.
   const w = (foot - cv.top - ROWS * capH - (ROWS - 1) * gap) / ROWS;
   if (w < 2 * vw) return;
@@ -677,7 +684,10 @@ function tick(now) {
   // Up next in the corner: the last 20 s, while the lyrics show and something is coming.
   const lyricsShow = !$('lyr').classList.contains('hidden');
   const n0 = nextItem();
-  $('corner').classList.toggle('on', !!(opt('corner', true) && lyricsShow && n0 && st.len && st.len - pos < 20000 && st.len - pos > 500));
+  // (2.38.0: whatever the right side shows -- it came only with the lyrics, and went with the grid.)
+  const overList = !$('list').classList.contains('hidden') || !$('art').classList.contains('hidden');
+  $('corner').classList.toggle('over', overList);
+  $('corner').classList.toggle('on', !!(opt('corner', true) && n0 && st.len && st.len - pos < 20000 && st.len - pos > 500));
   if (!lyricsShow || !rows.length || !linesMsg) return;
   const lines = linesMsg.lines;
   let i = -1;
