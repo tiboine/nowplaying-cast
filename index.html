@@ -131,9 +131,9 @@
 /*
  * NowPlaying on the TV. The PC's app (NowPlaying, Windows) connects to this receiver and sends
  * JSON on the namespace below, in parts, each when it changes (2.34.0):
- *   state  { key, title, artist, from, tint, sung, pos (ms), len (ms), playing, opts }
+ *   state  { key, title, artist, from, tint, sung, vis (the visualiser's colour), pos (ms), len (ms), playing, opts }
  *          opts: { right: 0 lyrics else the list | 1 lyrics | 2 the list | 3 lyrics else the artist,
- *                  list: 0 up next | 1 playlist, grid, strip: 0 waveform | 1 visualiser | 2 line,
+ *                  list: 0 up next | 1 playlist, grid, strip: 0 waveform | 1 visualiser | 2 line, white,
  *                  corner, logo, from, bar, clock, calm }
  *   art    { key, art (https or data: URL) }        logo { app, logo (data: URL) }
  *   lines  { key, lines: [{ t, x, w: [{ t, x }]?, r (romanised)? }] | null }
@@ -352,7 +352,8 @@ function drawStrip(pos) {
   g.clearRect(0, 0, W, H);
   if (!opt('bar', true)) return;
   const f = st.len ? Math.max(0, Math.min(1, pos / st.len)) : 0, px = f * W;
-  const tint = getComputedStyle(document.documentElement).getPropertyValue('--tint').trim() || '#7a9cff';
+  // Its colour: the cover's as the taskbar's visualiser has it (vivid), or white.
+  const tint = opt('white', false) ? 'rgba(255,255,255,0.92)' : (st.vis || st.tint || '#7a9cff');
   const mode = opt('strip', 0), mid = H * 0.55;
   if (mode === 0 && wave && waveKey === st.key) {
     const n = 80, bw = W / n;
