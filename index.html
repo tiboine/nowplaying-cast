@@ -341,12 +341,15 @@ function corner() {
 
 // "UP NEXT" (and the artist) level with "playing from" on the left.
 // And the list's first row level with the cover's top: the caption's gap is what is left.
+// Measured from the cover's box, which never moves ("playing from" glides on a track change):
+// "playing from" stands 2.4vw above it (its 1.2vw line and 1.2vw under it).
 function layout() {
-  const f = $('from').getBoundingClientRect(), r = $('right').getBoundingClientRect();
-  if (r.height) document.documentElement.style.setProperty('--head', Math.max(0, f.top - r.top) + 'px');
-  const cv = $('covers').getBoundingClientRect(), cap = $('listCap');
-  const ch = cap.getBoundingClientRect().height;
-  if (ch && cv.height) cap.style.marginBottom = Math.max(4, cv.top - f.top - ch) + 'px';
+  const cv = $('covers').getBoundingClientRect(), r = $('right').getBoundingClientRect();
+  if (!r.height || !cv.height) return;
+  const vw = innerWidth / 100, head = cv.top - 2.4 * vw;
+  document.documentElement.style.setProperty('--head', Math.max(0, head - r.top) + 'px');
+  const cap = $('listCap'), ch = cap.getBoundingClientRect().height;
+  if (ch) cap.style.marginBottom = Math.max(4, cv.top - head - ch) + 'px';
 }
 window.addEventListener('resize', layout);
 
