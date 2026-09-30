@@ -152,7 +152,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01c';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01d';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -765,9 +765,18 @@ function intercept(type, fn) { try { if (type) pm.setMessageInterceptor(type, fn
 intercept(MT.PAUSE, r => { remote('pause'); return r; });
 intercept(MT.PLAY, r => { remote('play'); return r; });
 intercept(MT.QUEUE_UPDATE, r => { if (r && r.jump > 0) remote('next'); else if (r && r.jump < 0) remote('prev'); return null; });
-// A seek in the TV's menu seeks the real song (as a fraction of it); what came is logged, to learn
-// what the remote's left / right send.
+// The remote's left / right: the TV turns them into a seek 10 s either way (measured: an absolute
+// time comes, not a step). By default they are PREVIOUS / NEXT instead (the remote has no such
+// keys; the on-screen buttons took a walk with the d-pad) -- one a press, however long it is held.
+// With "seek" chosen, a seek in the TV's menu seeks the real song.
+let skipAt = 0;
 intercept(MT.SEEK, r => {
+  if (r && st && !opt('remoteSeek', false)) {
+    const t = r.currentTime !== undefined ? r.currentTime * 1000 : r.relativeTime !== undefined ? songPos() + r.relativeTime * 1000 : null;
+    const now = performance.now();
+    if (t !== null && now - skipAt > 900) { skipAt = now; remote(t > songPos() ? 'next' : 'prev'); }
+    return null;
+  }
   if (r && st && st.len) {
     const t = r.currentTime !== undefined ? r.currentTime : null;
     if (t !== null) remote('seek', { f: Math.max(0, Math.min(1, t * 1000 / st.len)), t: t, rel: r.relativeTime });
