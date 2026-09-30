@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<!-- Google TV (an Android WebView) otherwise lays the page out at 1280x720 and shows it zoomed
+     out to 1488x837: the page filled only the top-left ~86 % of the screen. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>NowPlaying</title>
 <!-- The Cast receiver framework (Google's): gives us the channel the PC's app talks on. -->
 <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
@@ -151,14 +154,18 @@ function measures() {
     ah: screen.availHeight, dpr: devicePixelRatio, vs: vv ? vv.scale : null, vw: vv ? vv.width : null,
     ua: navigator.userAgent };
 }
-// And shown in a corner for the first 20 s, to read off the TV itself.
-(function () {
-  const m = measures(), d = document.createElement('div');
-  d.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9;font:14px monospace;color:#ff0;background:rgba(0,0,0,.6);padding:4px 8px';
-  d.textContent = 'inner ' + m.iw + 'x' + m.ih + '  client ' + m.cw + 'x' + m.ch + '  screen ' + m.sw + 'x' + m.sh + '  dpr ' + m.dpr + '  vv ' + m.vs;
-  document.body.appendChild(d);
-  setTimeout(() => d.remove(), 20000);
-})();
+// And if the screen still shows more than the page was laid out for (the visual viewport wider
+// than the layout one), the whole page is scaled up from the top-left corner to fill it.
+function fill() {
+  const vv = window.visualViewport, de = document.documentElement;
+  if (!vv || !de.clientWidth) return;
+  const k = Math.min(vv.width / de.clientWidth, vv.height / de.clientHeight);
+  document.body.style.transformOrigin = '0 0';
+  document.body.style.transform = Math.abs(k - 1) > 0.02 ? 'scale(' + k + ')' : '';
+}
+fill();
+if (window.visualViewport) window.visualViewport.addEventListener('resize', fill);
+window.addEventListener('resize', fill);
 </script>
 </body>
 </html>
