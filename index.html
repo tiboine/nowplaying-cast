@@ -9,7 +9,7 @@
 <!-- The Cast receiver framework (Google's): gives us the channel the PC's app talks on. -->
 <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 <style>
-  :root { --tint: #7a9cff; }
+  :root { --tint: #7a9cff; --head: 0px; }
   /* body clips (and is what fill() scales); html must not, or the scaled page is cut at the old size */
   html { background: #07070a; }
   html, body { margin: 0; height: 100%; background: #07070a; color: #fff;
@@ -28,39 +28,61 @@
   #stage { position: absolute; inset: 0; display: grid; grid-template-columns: 38% 62%; align-items: center; }
   /* Left: the sharp cover, its title and the time. */
   #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: 7vw; }
-  #cover { width: 26vw; height: 26vw; border-radius: 1.2vw; background: #222 center/cover no-repeat;
-    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); transition: transform 0.7s cubic-bezier(.2,.8,.2,1), opacity 0.4s; }
+  #covers { position: relative; width: 26vw; height: 26vw; }
+  .cov { position: absolute; inset: 0; border-radius: 1.2vw; background: #222 center/cover no-repeat;
+    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); will-change: transform, opacity; }
+  .cov.anim { transition: transform 0.75s cubic-bezier(.2,.8,.2,1), opacity 0.6s ease; }
+  .words { transition: opacity 0.28s ease, transform 0.45s cubic-bezier(.2,.8,.2,1); }
+  .words.out { opacity: 0; transform: translateY(-0.8vw); }
+  .words.pre { opacity: 0; transform: translateY(1vw); transition: none; }
   #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; max-width: 28vw; line-height: 1.1;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; max-width: 28vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; min-height: 1.2vw; }
-  #bar { width: 26vw; height: 0.35vw; background: rgba(255,255,255,0.18); border-radius: 1vw; margin-top: 2vw; overflow: hidden; }
-  #fill { height: 100%; width: 0; background: var(--tint); border-radius: 1vw; }
-  #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.6vw; }
-  /* Right: the lyrics, the sung line bright and a third down; or what comes next. */
-  #right { height: 80vh; position: relative; overflow: hidden; margin-right: 6vw;
+  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; min-height: 1.2vw; line-height: 1.2vw; }
+  #strip { width: 26vw; height: 3vw; margin-top: 1.6vw; display: block; }
+  #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.4vw; }
+  /* Right: the lyrics, the sung line bright and a third down; or the list, or the artist. */
+  #right { height: 80vh; position: relative; overflow: hidden; margin-right: 6vw; }
+  #lyr { position: absolute; inset: 0;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%); }
+            mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
+    transition: opacity 0.5s ease; }
   #lines { position: absolute; left: 0; right: 0; top: 0; transition: transform 0.55s cubic-bezier(.25,.8,.25,1); }
   .line { font-size: 2.6vw; font-weight: 700; line-height: 1.25; padding: 0.55vw 0; opacity: 0.28;
     transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(0.06vw); }
   .line.now { opacity: 1; filter: none; }
+  .line.near { opacity: 0.5; filter: none; }
+  .line .rom { display: block; font-size: 0.55em; font-weight: 400; opacity: 0.75; margin-top: 0.2vw; }
   /* Karaoke, as the full screen: each word fills with the sung colour as it is sung (--p), the
      part not yet sung a dim white; sung words stay coloured. */
   .line.now .w { background-image: linear-gradient(90deg, var(--sung, #fff) calc(var(--p, 0%) - 8%), rgba(255,255,255,0.41) var(--p, 0%));
     -webkit-background-clip: text; background-clip: text; color: transparent; }
-  .line.near { opacity: 0.5; filter: none; }
-  #next { position: absolute; left: 0; right: 0; top: 16vh; }
-  #nextHead { font-size: 1vw; letter-spacing: 0.3em; opacity: 0.55; margin-bottom: 1.4vw; }
-  .nx { display: flex; align-items: center; margin-bottom: 1.2vw; }
+  /* The list and the artist start level with "playing from" on the left (--head). */
+  #list, #art { position: absolute; left: 0; right: 0; top: var(--head); bottom: 0; transition: opacity 0.5s ease; }
+  .cap { font-size: 0.95vw; letter-spacing: 0.25em; opacity: 0.55; line-height: 1.2vw; margin-bottom: 1.4vw; text-transform: uppercase; }
+  .nx { display: flex; align-items: center; margin-bottom: 1.1vw; }
   .nx .a { width: 4.4vw; height: 4.4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
   .nx .t { margin-left: 1.2vw; min-width: 0; }
   .nx .t b { display: block; font-size: 1.6vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nx .t span { display: block; font-size: 1.1vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx.now .t b { color: var(--sung, #fff); }
+  .nx.now .a, .cell.now .a { box-shadow: 0 0 0 0.25vw var(--sung, #fff); }
+  #items.grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1.4vw 1.2vw; }
+  .cell .a { width: 100%; padding-top: 100%; border-radius: 0.6vw; background: rgba(255,255,255,0.1) center/cover no-repeat; }
+  .cell b { display: block; font-size: 0.95vw; margin-top: 0.5vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell span { display: block; font-size: 0.8vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #art .top { display: flex; align-items: center; gap: 2vw; }
+  #art .pic { width: 12vw; height: 12vw; border-radius: 50%; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; box-shadow: 0 1.5vw 4vw rgba(0,0,0,0.5); }
+  #art .name { font-size: 3vw; font-weight: 700; line-height: 1.1; }
+  #art .facts { font-size: 1.2vw; opacity: 0.7; margin-top: 0.6vw; }
+  #art .tags { font-size: 1vw; opacity: 0.55; margin-top: 0.4vw; letter-spacing: 0.05em; }
+  #art .bio { font-size: 1.35vw; line-height: 1.55; opacity: 0.85; margin-top: 2.4vw; max-width: 50vw;
+    display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden; }
   #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
     font-size: 2vw; letter-spacing: 0.4em; opacity: 0.5; }
   .hidden { display: none !important; }
   .gone { visibility: hidden; }
+  .faded { opacity: 0; }
   /* Whose music it is: the player's mark and name, top left. */
   #badge { position: absolute; left: 4vw; top: 5vh; display: flex; align-items: center; gap: 0.8vw;
     font-size: 1.05vw; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.75; }
@@ -85,14 +107,18 @@
 <div id="veil"></div>
 <div id="stage" class="hidden">
   <div id="left">
-    <div id="from"></div>
-    <div id="cover"></div>
-    <div id="title"></div>
-    <div id="artist"></div>
-    <div id="bar"><div id="fill"></div></div>
+    <div id="from" class="words"></div>
+    <div id="covers"><div class="cov" id="covA"></div><div class="cov faded" id="covB"></div></div>
+    <div id="title" class="words"></div>
+    <div id="artist" class="words"></div>
+    <canvas id="strip" width="520" height="60"></canvas>
     <div id="times"><span id="el">0:00</span><span id="left_">0:00</span></div>
   </div>
-  <div id="right"><div id="lines"></div><div id="next" class="hidden"><div id="nextHead">UP NEXT</div><div id="nextList"></div></div></div>
+  <div id="right">
+    <div id="lyr" class="hidden"><div id="lines"></div></div>
+    <div id="list" class="hidden"><div class="cap" id="listCap">UP NEXT</div><div id="items"></div></div>
+    <div id="art" class="hidden"><div class="top"><div class="pic"></div><div><div class="name"></div><div class="facts"></div><div class="tags"></div></div></div><div class="bio"></div></div>
+  </div>
 </div>
 <div id="badge" class="hidden"><img id="logo" alt=""><span id="appname"></span></div>
 <div id="clock" class="hidden"></div>
@@ -101,61 +127,129 @@
 <script>
 /*
  * NowPlaying on the TV. The PC's app (NowPlaying, Windows) connects to this receiver and sends
- * JSON on the namespace below, whenever something changes and every few seconds:
- *   { type: "state", title, artist, from, app, logo (data: URL), art (https URL or data: URL),
- *     tint "#rrggbb", sung "#rrggbb", pos (ms), len (ms), playing (bool),
- *     lines: [{ t: ms, x: "text" }] | null, next: [{ title, artist, art }],
- *     opts: { right: 0 lyrics else up next | 1 lyrics only | 2 up next only, corner, logo, from,
- *             bar, clock, calm } }
- * Between messages the position runs on here, so the lyrics and the bar move smoothly.
+ * JSON on the namespace below, in parts, each when it changes (2.34.0):
+ *   state  { key, title, artist, from, tint, sung, pos (ms), len (ms), playing, opts }
+ *          opts: { right: 0 lyrics else the list | 1 lyrics | 2 the list | 3 lyrics else the artist,
+ *                  list: 0 up next | 1 playlist, grid, strip: 0 waveform | 1 visualiser | 2 line,
+ *                  corner, logo, from, bar, clock, calm }
+ *   art    { key, art (https or data: URL) }        logo { app, logo (data: URL) }
+ *   lines  { key, lines: [{ t, x, w: [{ t, x }]?, r (romanised)? }] | null }
+ *   list   { mode: 0 up next | 1 playlist, at (the playing one's index, playlist), items: [{ title, artist, art }] }
+ *   artist { name, pic (data: URL), bio, facts, tags, listeners }
+ *   wave   { key, w: [160 x 0..100] }               bands { b: [32 x 0..99] } (~15 a second)
+ * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
 const $ = id => document.getElementById(id);
-let st = null, at = 0, lastLines = null, cur = -2, opts = {}, artNow = null, bgFront = 'bgA';
+let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
+let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
+let rightSig = null;
 
 function fmt(ms) { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function opt(k, dflt) { return opts[k] === undefined ? dflt : opts[k]; }
 
-function apply(m) {
-  if (m.type !== 'state') return;
-  const fresh = !st || st.title !== m.title || st.artist !== m.artist;
+function onMessage(m) {
+  switch (m.type) {
+    case 'state': state(m); break;
+    case 'art': cover(m); break;
+    case 'logo':
+      if (m.logo && $('logo').src !== m.logo) $('logo').src = m.logo;
+      $('logo').classList.toggle('hidden', !m.logo);
+      $('appname').textContent = m.app || '';
+      $('badge').dataset.has = (m.logo || m.app) ? '1' : '';
+      badge();
+      break;
+    case 'lines': linesMsg = m; right(); break;
+    case 'list': listMsg = m; right(); corner(); break;
+    case 'artist': artistMsg = m; right(); break;
+    case 'wave': wave = m.w; waveKey = m.key; break;
+    case 'bands': bands = m.b; bandsAt = performance.now(); break;
+  }
+}
+
+function badge() { $('badge').classList.toggle('hidden', !opt('logo', true) || !$('badge').dataset.has); }
+
+function state(m) {
+  const fresh = !st || st.key !== m.key;
   st = m; at = performance.now(); opts = m.opts || {};
   $('idle').classList.add('hidden'); $('stage').classList.remove('hidden');
   document.documentElement.style.setProperty('--tint', m.tint || '#7a9cff');
   document.documentElement.style.setProperty('--sung', m.sung || '#fff');
-  $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
-  $('from').textContent = opt('from', true) ? (m.from || '') : '';
-  if (m.logo && $('logo').src !== m.logo) $('logo').src = m.logo;
-  $('logo').classList.toggle('hidden', !m.logo);
-  $('appname').textContent = m.app || '';
-  $('badge').classList.toggle('hidden', !opt('logo', true) || (!m.logo && !m.app));
-  $('bar').classList.toggle('gone', !opt('bar', true)); $('times').classList.toggle('gone', !opt('bar', true));
+  const from = opt('from', true) ? (m.from || '') : '';
+  if (fresh && shownKey !== null) {
+    // A new track: the words step out and the new ones rise in (the cover does its own).
+    ['from', 'title', 'artist'].forEach(id => $(id).classList.add('out'));
+    setTimeout(() => {
+      $('from').textContent = from; $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
+      ['from', 'title', 'artist'].forEach(id => { const e = $(id); e.classList.remove('out'); e.classList.add('pre'); void e.offsetWidth; e.classList.remove('pre'); });
+    }, 280);
+  } else {
+    $('from').textContent = from; $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
+  }
+  shownKey = m.key;
+  badge();
+  $('strip').classList.toggle('gone', !opt('bar', true)); $('times').classList.toggle('gone', !opt('bar', true));
   $('clock').classList.toggle('hidden', !opt('clock', false));
-  if (m.art && m.art !== artNow) { artNow = m.art; $('cover').style.backgroundImage = 'url("' + m.art + '")'; backdrop(m.art); }
-  if (fresh) { $('cover').style.transform = 'scale(0.96)'; setTimeout(() => $('cover').style.transform = 'scale(1)', 30); }
-  const key = JSON.stringify(m.lines || null) + '|' + opt('right', 0);
-  if (key !== lastLines) { lastLines = key; build(m.lines); cur = -2; }
-  const nl = $('nextList'); nl.innerHTML = '';
-  (m.next || []).slice(0, 6).forEach(n => {
-    const d = document.createElement('div'); d.className = 'nx';
-    d.innerHTML = '<div class="a"></div><div class="t"><b></b><span></span></div>';
-    if (n.art) d.querySelector('.a').style.backgroundImage = 'url("' + n.art + '")';
-    d.querySelector('b').textContent = n.title || ''; d.querySelector('span').textContent = n.artist || '';
-    nl.appendChild(d);
-  });
-  const n0 = (m.next || [])[0], c = $('corner');
-  c.querySelector('b').textContent = n0 ? n0.title || '' : '';
-  c.querySelector('span').textContent = n0 ? n0.artist || '' : '';
-  c.querySelector('.a').style.backgroundImage = n0 && n0.art ? 'url("' + n0.art + '")' : '';
+  right();
+  layout();
 }
 
-function build(lines) {
+// ---- the cover: a new track's slides up and out while the new one rises from below (as the
+// card's does); the same track's sharper picture simply takes its place.
+function cover(m) {
+  if (!m.art || m.art === artNow) return;
+  const newTrack = m.key !== cover.key;
+  cover.key = m.key; artNow = m.art;
+  const img = new Image();
+  img.onload = () => {
+    const u = 'url("' + m.art + '")';
+    if (!newTrack || !cover.shown) {
+      $(covFront).style.backgroundImage = u; cover.shown = true;
+    } else {
+      const old = $(covFront), nw = $(covFront === 'covA' ? 'covB' : 'covA');
+      nw.classList.remove('anim'); nw.style.backgroundImage = u;
+      nw.style.transform = 'translateY(35%) scale(0.9)'; nw.classList.add('faded');
+      void nw.offsetWidth;
+      nw.classList.add('anim'); old.classList.add('anim');
+      nw.style.transform = ''; nw.classList.remove('faded');
+      old.style.transform = 'translateY(-30%) scale(0.9)'; old.classList.add('faded');
+      covFront = nw.id;
+    }
+    backdrop(m.art);
+  };
+  img.onerror = () => { $(covFront).style.backgroundImage = 'url("' + m.art + '")'; backdrop(m.art); };
+  img.src = m.art;
+}
+
+// ---- the right side: lyrics, the list, or the artist
+function right() {
+  if (!st) return;
+  const r = opt('right', 0);
+  const lines = linesMsg && linesMsg.key === st.key ? linesMsg.lines : null;
+  const hasLyrics = !!(lines && lines.length);
+  const hasArtist = !!(artistMsg && artistMsg.name && (artistMsg.bio || artistMsg.pic));
+  let show = 'none';
+  if (r === 1) show = hasLyrics ? 'lyrics' : 'none';
+  else if (r === 2) show = 'list';
+  else if (r === 3) show = hasLyrics ? 'lyrics' : hasArtist ? 'artist' : 'list';
+  else show = hasLyrics ? 'lyrics' : 'list';
+  const sig = show + '|' + (show === 'lyrics' ? st.key + JSON.stringify(lines).length : '')
+    + '|' + (show === 'list' ? JSON.stringify(listMsg) + opt('grid', false) : '') + '|' + (show === 'artist' ? artistMsg.name : '');
+  if (sig === rightSig) return;
+  rightSig = sig;
+  $('lyr').classList.toggle('hidden', show !== 'lyrics');
+  $('list').classList.toggle('hidden', show !== 'list');
+  $('art').classList.toggle('hidden', show !== 'artist');
+  if (show === 'lyrics') { buildLines(lines); cur = -2; }
+  if (show === 'list') buildList();
+  if (show === 'artist') buildArtist();
+  // what comes in fades in
+  const el = show === 'lyrics' ? $('lyr') : show === 'list' ? $('list') : show === 'artist' ? $('art') : null;
+  if (el) { el.classList.add('faded'); void el.offsetWidth; el.classList.remove('faded'); }
+}
+
+function buildLines(lines) {
   const box = $('lines'); box.innerHTML = ''; rows = [];
-  const right = opt('right', 0);
-  const has = lines && lines.length > 0 && right !== 2;
-  $('next').classList.toggle('hidden', has || right === 1);
-  box.classList.toggle('hidden', !has);
-  if (!has) return;
   rows = lines.map((l, i) => {
     const d = document.createElement('div'); d.className = 'line';
     const end = i + 1 < lines.length ? lines[i + 1].t : l.t + 6000;
@@ -166,6 +260,7 @@ function build(lines) {
       const sp = document.createElement('span'); sp.className = 'w'; sp.textContent = w.x; d.appendChild(sp);
       w.el = sp;
     });
+    if (l.r) { const ro = document.createElement('span'); ro.className = 'rom'; ro.textContent = l.r; d.appendChild(ro); }
     box.appendChild(d);
     return words;
   });
@@ -195,6 +290,97 @@ function wordsOf(l, end) {
   return out;
 }
 
+// The list: up next, or the playing playlist (its playing one ringed), as rows or a grid.
+function buildList() {
+  const box = $('items'); box.innerHTML = '';
+  const m = listMsg || { mode: 0, at: -1, items: [] };
+  const grid = opt('grid', false);
+  $('listCap').textContent = m.mode === 1 ? 'PLAYLIST' : 'UP NEXT';
+  box.className = grid ? 'grid' : '';
+  let items = m.items || [], from = 0;
+  if (!grid) from = m.mode === 1 ? Math.max(0, m.at - 1) : 0;
+  const count = grid ? 18 : 7;
+  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - count, Math.floor(m.at / 6) * 6 - 6));
+  items.slice(from, from + count).forEach((n, k) => {
+    const i = from + k, d = document.createElement('div');
+    d.className = (grid ? 'cell' : 'nx') + (m.mode === 1 && i === m.at ? ' now' : '');
+    d.innerHTML = '<div class="a"></div><div class="t"><b></b><span></span></div>';
+    if (n.art) d.querySelector('.a').style.backgroundImage = 'url("' + n.art + '")';
+    d.querySelector('b').textContent = n.title || ''; d.querySelector('span').textContent = n.artist || '';
+    box.appendChild(d);
+  });
+  if (!items.length) { const d = document.createElement('div'); d.className = 'cap'; d.textContent = 'Nothing coming up that the player says'; box.appendChild(d); }
+}
+
+function buildArtist() {
+  const a = artistMsg, e = $('art');
+  e.querySelector('.pic').style.backgroundImage = a.pic ? 'url("' + a.pic + '")' : '';
+  e.querySelector('.pic').classList.toggle('hidden', !a.pic);
+  e.querySelector('.name').textContent = a.name || '';
+  e.querySelector('.facts').textContent = a.facts || '';
+  e.querySelector('.tags').textContent = (a.tags || '') + (a.listeners ? (a.tags ? '  ·  ' : '') + big(a.listeners) + ' listeners' : '');
+  e.querySelector('.bio').textContent = a.bio || '';
+}
+function big(n) { return n >= 1e6 ? (n / 1e6).toFixed(1).replace('.0', '') + 'M' : n >= 1e3 ? Math.round(n / 1e3) + 'K' : '' + n; }
+
+// What comes next, for the corner card: up next's first, or the playlist's one after the playing.
+function nextItem() {
+  const m = listMsg; if (!m || !m.items) return null;
+  return m.mode === 1 ? m.items[m.at + 1] || null : m.items[0] || null;
+}
+function corner() {
+  const n0 = nextItem(), c = $('corner');
+  c.querySelector('b').textContent = n0 ? n0.title || '' : '';
+  c.querySelector('span').textContent = n0 ? n0.artist || '' : '';
+  c.querySelector('.a').style.backgroundImage = n0 && n0.art ? 'url("' + n0.art + '")' : '';
+}
+
+// "UP NEXT" (and the artist) level with "playing from" on the left.
+function layout() {
+  const f = $('from').getBoundingClientRect(), r = $('right').getBoundingClientRect();
+  if (r.height) document.documentElement.style.setProperty('--head', Math.max(0, f.top - r.top) + 'px');
+}
+window.addEventListener('resize', layout);
+
+// ---- the strip under the title: the waveform (as the full screen), the visualiser, or a line;
+// a dot where the song is, always.
+function drawStrip(pos) {
+  const c = $('strip'), g = c.getContext('2d'), W = c.width, H = c.height;
+  g.clearRect(0, 0, W, H);
+  if (!opt('bar', true)) return;
+  const f = st.len ? Math.max(0, Math.min(1, pos / st.len)) : 0, px = f * W;
+  const tint = getComputedStyle(document.documentElement).getPropertyValue('--tint').trim() || '#7a9cff';
+  const mode = opt('strip', 0), mid = H * 0.55;
+  if (mode === 0 && wave && waveKey === st.key) {
+    const n = 80, bw = W / n;
+    for (let i = 0; i < n; i++) {
+      const v = Math.max(wave[i * 2] || 0, wave[i * 2 + 1] || 0) / 100;
+      const h = Math.max(2, v * (H - 12));
+      g.fillStyle = (i + 0.5) * bw <= px ? tint : 'rgba(255,255,255,0.32)';
+      g.fillRect(i * bw + bw * 0.18, mid - h / 2, bw * 0.64, h);
+    }
+  } else if (mode === 1) {
+    const b = bands && performance.now() - bandsAt < 1500 ? bands : null, n = 32, bw = W / n;
+    for (let i = 0; i < n; i++) {
+      const v = b ? b[i] / 99 : 0.03;
+      const h = Math.max(2, v * (H - 8));
+      g.fillStyle = tint; g.globalAlpha = 0.85;
+      g.fillRect(i * bw + bw * 0.15, H - 4 - h, bw * 0.7, h);
+    }
+    g.globalAlpha = 1;
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, H - 3, W, 3);
+    g.fillStyle = tint; g.fillRect(0, H - 3, px, 3);
+  } else {
+    g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(0, mid - 3, W, 6);
+    g.fillStyle = tint; g.fillRect(0, mid - 3, px, 6);
+  }
+  // the play head: a line through the waveform, and a dot you can always find
+  const y = mode === 1 ? H - 2 : mid;
+  if (mode === 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(px - 1, 4, 2, H - 8); }
+  g.beginPath(); g.arc(Math.max(7, Math.min(W - 7, px)), y, 7, 0, Math.PI * 2);
+  g.fillStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 6; g.fill(); g.shadowBlur = 0;
+}
+
 // ---- the living background
 // The cover drawn once, small and blurred, into the back layer; the layers swap with a fade.
 // Its three most colourful colours become the clouds.
@@ -211,7 +397,7 @@ function backdrop(url) {
   };
   // A host that does not allow CORS refuses the picture outright when asked for it that way:
   // asked again plainly, it still draws (only the clouds, which read its pixels, are left out).
-  img.onerror = () => { if (img.crossOrigin) { img.crossOrigin = null; img.removeAttribute('crossorigin'); img.src = url + (url.indexOf('data:') === 0 ? '' : ''); } };
+  img.onerror = () => { if (img.crossOrigin) { img.crossOrigin = null; img.removeAttribute('crossorigin'); img.src = url; } };
   img.src = url;
 }
 
@@ -264,14 +450,14 @@ function tick(now) {
   drift(now || performance.now());
   if (!st) return;
   const pos = Math.min(st.len || 0, st.pos + (st.playing ? performance.now() - at : 0));
-  $('fill').style.width = st.len ? (100 * pos / st.len) + '%' : '0';
+  drawStrip(pos);
   $('el').textContent = fmt(pos); $('left_').textContent = '−' + fmt((st.len || 0) - pos);
   // Up next in the corner: the last 20 s, while the lyrics show and something is coming.
-  const lyricsShow = !$('lines').classList.contains('hidden');
-  const n0 = (st.next || [])[0];
+  const lyricsShow = !$('lyr').classList.contains('hidden');
+  const n0 = nextItem();
   $('corner').classList.toggle('on', !!(opt('corner', true) && lyricsShow && n0 && st.len && st.len - pos < 20000 && st.len - pos > 500));
-  const lines = st.lines;
-  if (!lines || !lines.length || !lyricsShow) return;
+  if (!lyricsShow || !rows.length || !linesMsg) return;
+  const lines = linesMsg.lines;
   let i = -1;
   for (let k = 0; k < lines.length; k++) if (lines[k].t <= pos + 250) i = k; else break;
   // The sweep through the sung line's words, 250 ms ahead as the lines are.
@@ -298,7 +484,7 @@ clock(); setInterval(clock, 5000);
 const context = cast.framework.CastReceiverContext.getInstance();
 let told = false;
 context.addCustomMessageListener(NS, e => {
-  try { apply(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); }
+  try { onMessage(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); }
   // The first message from the PC is answered with what this screen measures.
   if (!told) { told = true; try { context.sendCustomMessage(NS, e.senderId, measures()); } catch (x) { console.log(x); } }
 });
