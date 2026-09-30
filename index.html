@@ -152,7 +152,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-09-30b';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01a';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -220,6 +220,7 @@ function state(m) {
   $('clock').classList.toggle('hidden', !opt('clock', false));
   right();
   layout();
+  quietFollow(m);
 }
 
 // ---- the cover: a new track's slides up and out while the new one rises from below (as the
@@ -244,6 +245,7 @@ function cover(m) {
       covFront = nw.id;
     }
     backdrop(m.art);
+    if (st) quietFollow(st);
   };
   img.onerror = () => { $(covFront).style.backgroundImage = 'url("' + m.art + '")'; backdrop(m.art); };
   img.src = m.art;
@@ -719,7 +721,60 @@ document.addEventListener('keydown', e => {
 const options = new cast.framework.CastReceiverOptions();
 options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
 options.disableIdleTimeout = true;   // a now-playing screen: it stays while the PC talks to it
-options.skipPlayersLoad = true;      // no media player of its own
+// No skipPlayersLoad: the page plays (silence) so the TV's remote reaches it -- see below.
+options.supportedCommands = cast.framework.messages.Command.PAUSE | cast.framework.messages.Command.QUEUE_NEXT
+  | cast.framework.messages.Command.QUEUE_PREV | cast.framework.messages.Command.SEEK;
+
+// ---- the TV's remote (2.36.0). Google TV hands the remote's play / pause / next / previous to
+// the app that plays media, and a web page's key events never see them (measured: nothing came).
+// So the page plays SILENCE, looped, in a hidden audio element, with the track's title, artist and
+// cover as its "media" -- the TV (and the Google Home app) show it and send their media commands
+// here, where they are stopped and handed to the PC, which does them to the real player.
+const pm = context.getPlayerManager();
+const quiet = document.createElement('audio'); quiet.style.display = 'none'; document.body.appendChild(quiet);
+pm.setMediaElement(quiet);
+const SILENCE = new URL('silence.wav', location.href).href;
+function remote(cmd) {
+  try { if (senderId) context.sendCustomMessage(NS, senderId, { type: 'remote', cmd: cmd }); } catch (x) { console.log(x); }
+}
+const MT = cast.framework.messages.MessageType;
+pm.setMessageInterceptor(MT.PAUSE, r => { remote('pause'); return r; });
+pm.setMessageInterceptor(MT.PLAY, r => { remote('play'); return r; });
+pm.setMessageInterceptor(MT.QUEUE_UPDATE, r => { if (r && r.jump > 0) remote('next'); else if (r && r.jump < 0) remote('prev'); return null; });
+pm.setMessageInterceptor(MT.QUEUE_NEXT, r => { remote('next'); return null; });
+pm.setMessageInterceptor(MT.QUEUE_PREV, r => { remote('prev'); return null; });
+pm.setMessageInterceptor(MT.SEEK, r => { remote('seek'); return null; });
+let quietUp = false, quietKey = null, quietArt = null;
+function quietMeta(m) {
+  const md = new cast.framework.messages.MusicTrackMediaMetadata();
+  md.title = m.title || ''; md.artist = m.artist || '';
+  if (artNow && artNow.indexOf('https:') === 0) md.images = [new cast.framework.messages.Image(artNow)];
+  return md;
+}
+function quietLoad() {
+  if (!st) return;
+  const req = new cast.framework.messages.LoadRequestData();
+  const mi = new cast.framework.messages.MediaInformation();
+  mi.contentId = SILENCE; mi.contentUrl = SILENCE; mi.contentType = 'audio/wav';
+  mi.streamType = cast.framework.messages.StreamType.BUFFERED;
+  mi.metadata = quietMeta(st);
+  req.media = mi; req.autoplay = !!st.playing;
+  quietUp = true; quietKey = st.key; quietArt = artNow;
+  pm.load(req).catch(x => console.log('quiet load', x));
+}
+// Silence ends every 20 s: again, at once.
+pm.addEventListener(cast.framework.events.EventType.MEDIA_FINISHED, () => { if (quietUp) quietLoad(); });
+// The PC's state is the truth: the TV's "media" plays and pauses with it, and wears its words.
+function quietFollow(m) {
+  if (!quietUp) { quietLoad(); return; }
+  try {
+    const mi = pm.getMediaInformation();
+    if (mi && (m.key !== quietKey || artNow !== quietArt)) { quietKey = m.key; quietArt = artNow; mi.metadata = quietMeta(m); pm.setMediaInformation(mi, true); }
+    const ps = pm.getPlayerState(), P = cast.framework.messages.PlayerState;
+    if (m.playing && ps === P.PAUSED) pm.play();
+    else if (!m.playing && ps === P.PLAYING) pm.pause();
+  } catch (x) { console.log(x); }
+}
 context.start(options);
 
 // Staying awake. Google TV puts its screensaver over an app that plays no media after a few
