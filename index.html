@@ -249,6 +249,7 @@ function right() {
   // what comes in fades in
   const el = show === 'lyrics' ? $('lyr') : show === 'list' ? $('list') : show === 'artist' ? $('art') : null;
   if (el) { el.classList.add('faded'); void el.offsetWidth; el.classList.remove('faded'); }
+  layout();
 }
 
 function buildLines(lines) {
@@ -339,9 +340,13 @@ function corner() {
 }
 
 // "UP NEXT" (and the artist) level with "playing from" on the left.
+// And the list's first row level with the cover's top: the caption's gap is what is left.
 function layout() {
   const f = $('from').getBoundingClientRect(), r = $('right').getBoundingClientRect();
   if (r.height) document.documentElement.style.setProperty('--head', Math.max(0, f.top - r.top) + 'px');
+  const cv = $('covers').getBoundingClientRect(), cap = $('listCap');
+  const ch = cap.getBoundingClientRect().height;
+  if (ch && cv.height) cap.style.marginBottom = Math.max(4, cv.top - f.top - ch) + 'px';
 }
 window.addEventListener('resize', layout);
 
