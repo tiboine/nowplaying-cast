@@ -67,7 +67,10 @@
   .nx .t span { display: block; font-size: 1.1vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nx.now .t b { color: var(--sung, #fff); }
   .nx.now .a, .cell.now .a { box-shadow: 0 0 0 0.25vw var(--sung, #fff); }
-  #items.grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1.4vw 1.2vw; }
+  /* minmax(0, 1fr): a plain 1fr is at least as wide as a cell's longest title (no wrap), and one
+     long title made its column twice as wide and pushed the last off the screen. */
+  #items.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1.4vw 1.2vw; }
+  .cell { min-width: 0; }
   .cell .a { width: 100%; padding-top: 100%; border-radius: 0.6vw; background: rgba(255,255,255,0.1) center/cover no-repeat; }
   .cell b { display: block; font-size: 0.95vw; margin-top: 0.5vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cell span { display: block; font-size: 0.8vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
