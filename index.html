@@ -28,10 +28,12 @@
   #stage { position: absolute; inset: 0; display: grid; grid-template-columns: 38% 62%; align-items: center; }
   /* Left: the sharp cover, its title and the time. */
   #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: 7vw; }
-  #covers { position: relative; width: 26vw; height: 26vw; }
-  .cov { position: absolute; inset: 0; border-radius: 1.2vw; background: #222 center/cover no-repeat;
-    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); will-change: transform, opacity; }
-  .cov.anim { transition: transform 0.75s cubic-bezier(.2,.8,.2,1), opacity 0.6s ease; }
+  /* The cover's frame: a new track's picture rises in from below while the old one leaves over
+     the top -- moved, never faded (a fade looked cheap). The frame clips them. */
+  #covers { position: relative; width: 26vw; height: 26vw; border-radius: 1.2vw; overflow: hidden;
+    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); background: #222; }
+  .cov { position: absolute; inset: 0; background: #222 center/cover no-repeat; will-change: transform; }
+  .cov.anim { transition: transform 0.7s cubic-bezier(.3,.7,.2,1); }
   .words { transition: opacity 0.28s ease, transform 0.45s cubic-bezier(.2,.8,.2,1); }
   .words.out { opacity: 0; transform: translateY(-0.8vw); }
   .words.pre { opacity: 0; transform: translateY(1vw); transition: none; }
@@ -46,8 +48,8 @@
   #strip { width: 26vw; height: 3vw; margin-top: 1.6vw; display: block; }
   #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.4vw; }
   /* Right: the lyrics, the sung line bright and a third down; or the list, or the artist. */
-  #right { height: 80vh; position: relative; overflow: hidden; margin-right: 6vw; }
-  #lyr { position: absolute; inset: 0;
+  #right { height: 100vh; position: relative; overflow: hidden; margin-right: 6vw; }
+  #lyr { position: absolute; left: 0; right: 0; top: 10vh; bottom: 10vh;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
     transition: opacity 0.5s ease; }
@@ -115,7 +117,7 @@
 <div id="stage" class="hidden">
   <div id="left">
     <div id="from" class="words"></div>
-    <div id="covers"><div class="cov" id="covA"></div><div class="cov faded" id="covB"></div></div>
+    <div id="covers"><div class="cov" id="covA"></div><div class="cov" id="covB" style="transform: translateY(100%)"></div></div>
     <div id="title" class="words"></div>
     <div id="artist" class="words"></div>
     <canvas id="strip" width="520" height="60"></canvas>
@@ -201,7 +203,7 @@ function state(m) {
     ['from', 'title', 'artist'].forEach(id => $(id).classList.add('out'));
     setTimeout(() => {
       $('from').textContent = from; $('title').textContent = m.title || ''; $('artist').textContent = m.artist || '';
-      fitWords();
+      fitWords(); layout();   // the title's height changed: the grid follows it
       ['from', 'title', 'artist'].forEach(id => { const e = $(id); e.classList.remove('out'); e.classList.add('pre'); void e.offsetWidth; e.classList.remove('pre'); });
     }, 280);
   } else {
@@ -230,11 +232,11 @@ function cover(m) {
     } else {
       const old = $(covFront), nw = $(covFront === 'covA' ? 'covB' : 'covA');
       nw.classList.remove('anim'); nw.style.backgroundImage = u;
-      nw.style.transform = 'translateY(35%) scale(0.9)'; nw.classList.add('faded');
+      nw.style.transform = 'translateY(100%)';
       void nw.offsetWidth;
       nw.classList.add('anim'); old.classList.add('anim');
-      nw.style.transform = ''; nw.classList.remove('faded');
-      old.style.transform = 'translateY(-30%) scale(0.9)'; old.classList.add('faded');
+      nw.style.transform = 'translateY(0)';
+      old.style.transform = 'translateY(-100%)';
       covFront = nw.id;
     }
     backdrop(m.art);
@@ -320,10 +322,11 @@ function buildList() {
   const grid = opt('grid', false);
   $('listCap').textContent = m.mode === 1 ? 'PLAYLIST' : 'UP NEXT';
   box.className = grid ? 'grid' : '';
+  if (!grid) { box.style.gridTemplateColumns = ''; }
   let items = m.items || [], from = 0;
   if (!grid) from = m.mode === 1 ? Math.max(0, m.at - 1) : 0;
-  const count = grid ? 18 : 7;
-  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - count, Math.floor(m.at / 6) * 6 - 6));
+  const count = grid ? 24 : 7;
+  if (grid && m.mode === 1 && m.at >= 0) from = Math.max(0, Math.min(items.length - gridCols * 3, Math.floor(m.at / gridCols) * gridCols - gridCols));
   items.slice(from, from + count).forEach((n, k) => {
     const i = from + k, d = document.createElement('div');
     d.className = (grid ? 'cell' : 'nx') + (m.mode === 1 && i === m.at ? ' now' : '');
@@ -369,6 +372,30 @@ function layout() {
   document.documentElement.style.setProperty('--head', Math.max(0, head - r.top) + 'px');
   const cap = $('listCap'), ch = cap.getBoundingClientRect().height;
   if (ch) cap.style.marginBottom = Math.max(4, cv.top - head - ch) + 'px';
+  gridFit(cv, vw);
+}
+
+// The grid sized by the room from the cover's top to the playing title's foot: three rows, the
+// bottom row's song titles ending on the same line as the title playing (whose height changes
+// with how many lines it takes). The covers are as big as that allows; as many columns as fit.
+let gridCols = 6;
+function gridFit(cv, vw) {
+  const box = $('items');
+  if (!box.classList.contains('grid') || $('list').classList.contains('hidden')) return;
+  const cell = box.querySelector('.cell'); if (!cell) return;
+  const title = $('title');
+  // Not the title's box: it may be gliding in (a transform). Its place in the column instead.
+  const titleFoot = cv.bottom + 2.6 * vw + title.offsetHeight;
+  const b = cell.querySelector('b'), sp = cell.querySelector('span');
+  const mt = 0.5 * vw, bh = b.offsetHeight, capH = mt + bh + sp.offsetHeight, gap = 1.4 * vw, gapc = 1.2 * vw;
+  const w = (titleFoot - cv.top - 2 * capH - 2 * gap - (mt + bh)) / 3;
+  if (w < 2 * vw) return;
+  const cols = Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (w + gapc))));
+  box.style.gridTemplateColumns = 'repeat(' + cols + ', ' + w + 'px)';
+  box.style.rowGap = gap + 'px'; box.style.columnGap = gapc + 'px';
+  const cells = box.children;
+  for (let i = 0; i < cells.length; i++) cells[i].style.display = i < cols * 3 ? '' : 'none';
+  if (cols !== gridCols) { gridCols = cols; rightSig = null; right(); }   // a playlist's rows start where the playing one is
 }
 window.addEventListener('resize', layout);
 
@@ -517,7 +544,7 @@ function tick(now) {
   const box = $('lines'), kids = box.children;
   for (let k = 0; k < kids.length; k++) kids[k].className = 'line' + (k === i ? ' now' : Math.abs(k - i) === 1 ? ' near' : '');
   const el = kids[Math.max(0, i)];
-  const y = el ? el.offsetTop - $('right').clientHeight / 3 : 0;
+  const y = el ? el.offsetTop - $('lyr').clientHeight / 3 : 0;
   box.style.transform = 'translateY(' + (-Math.max(0, y)) + 'px)';
 }
 requestAnimationFrame(tick);
