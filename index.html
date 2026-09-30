@@ -146,7 +146,7 @@ const NS = 'urn:x-cast:app.nowplaying';
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
-let rightSig = null, shownBands = null;
+let rightSig = null, shownBands = null, capsAt = null, capsHold = null, px1 = 1;
 
 function fmt(ms) { ms = Math.max(0, ms | 0); const s = Math.floor(ms / 1000); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
 function opt(k, dflt) { return opts[k] === undefined ? dflt : opts[k]; }
@@ -356,7 +356,12 @@ window.addEventListener('resize', layout);
 // ---- the strip under the title: the waveform (as the full screen), the visualiser, or a line;
 // a dot where the song is, always.
 function drawStrip(pos) {
-  const c = $('strip'), g = c.getContext('2d'), W = c.width, H = c.height;
+  const c = $('strip');
+  // Drawn at the screen's own density: 26vw of CSS pixels times the device's pixel ratio.
+  const bw0 = Math.round(c.clientWidth * (window.devicePixelRatio || 1)), bh0 = Math.round(c.clientHeight * (window.devicePixelRatio || 1));
+  if (bw0 > 0 && (c.width !== bw0 || c.height !== bh0)) { c.width = bw0; c.height = bh0; }
+  px1 = c.height / 60;   // the sizes below were made for a 60 px tall strip
+  const g = c.getContext('2d'), W = c.width, H = c.height;
   g.clearRect(0, 0, W, H);
   if (!opt('bar', true)) return;
   const f = st.len ? Math.max(0, Math.min(1, pos / st.len)) : 0, px = f * W;
@@ -367,35 +372,41 @@ function drawStrip(pos) {
     const n = 80, bw = W / n;
     for (let i = 0; i < n; i++) {
       const v = Math.max(wave[i * 2] || 0, wave[i * 2 + 1] || 0) / 100;
-      const h = Math.max(2, v * (H - 12));
+      const h = Math.max(2 * px1, v * (H - 12 * px1));
       g.fillStyle = (i + 0.5) * bw <= px ? tint : 'rgba(255,255,255,0.32)';
       g.fillRect(i * bw + bw * 0.18, mid - h / 2, bw * 0.64, h);
     }
   } else if (mode === 1) {
-    // The bands come ~30 times a second; each frame (60) the bars glide toward the last ones --
-    // quick up, gentle down, as the taskbar's visualiser moves -- so it never steps.
-    const b = bands && performance.now() - bandsAt < 1500 ? bands : null, n = 32, bw = W / n;
-    if (!shownBands) shownBands = new Array(n).fill(0);
+    // The bands come ~30 times a second, not quite evenly over the network. Each frame the bars
+    // rise quickly toward the last ones and FALL at a steady speed (full height in ~0.6 s, by
+    // the time between frames) -- a share per frame dropped them to half in a quarter second, so
+    // the tops were gone before they were seen. A cap holds each peak a moment, then falls.
+    const now = performance.now(), dt = Math.min(0.05, (now - (drawStrip.at || now)) / 1000); drawStrip.at = now;
+    const b = bands && now - bandsAt < 1500 ? bands : null, n = 32, bw = W / n, room = H - 6 * px1;
+    if (!shownBands) { shownBands = new Array(n).fill(0); capsAt = new Array(n).fill(0); capsHold = new Array(n).fill(0); }
+    g.fillStyle = tint;
     for (let i = 0; i < n; i++) {
-      const target = b ? b[i] / 99 : 0.03, cur0 = shownBands[i];
-      shownBands[i] = cur0 + (target - cur0) * (target > cur0 ? 0.55 : 0.16);
-      const v = shownBands[i];
-      const h = Math.max(2, v * (H - 8));
-      g.fillStyle = tint; g.globalAlpha = 0.85;
-      g.fillRect(i * bw + bw * 0.15, H - 4 - h, bw * 0.7, h);
+      const target = b ? b[i] / 99 : 0.02, cur0 = shownBands[i];
+      const v = target > cur0 ? cur0 + (target - cur0) * Math.min(1, dt * 22) : Math.max(target, cur0 - dt * 1.7);
+      shownBands[i] = v;
+      if (v >= capsAt[i]) { capsAt[i] = v; capsHold[i] = 0.35; }
+      else if (capsHold[i] > 0) capsHold[i] -= dt;
+      else capsAt[i] = Math.max(v, capsAt[i] - dt * 0.9);
+      const h = Math.max(2 * px1, v * room), x = i * bw + bw * 0.15, w = bw * 0.7;
+      g.fillRect(x, H - 4 * px1 - h, w, h);
+      if (capsAt[i] > v + 0.02) g.fillRect(x, H - 4 * px1 - capsAt[i] * room - 2 * px1, w, 2 * px1);
     }
-    g.globalAlpha = 1;
-    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, H - 3, W, 3);
-    g.fillStyle = tint; g.fillRect(0, H - 3, px, 3);
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(0, H - 3 * px1, W, 3 * px1);
+    g.fillStyle = tint; g.fillRect(0, H - 3 * px1, px, 3 * px1);
   } else {
-    g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(0, mid - 3, W, 6);
-    g.fillStyle = tint; g.fillRect(0, mid - 3, px, 6);
+    g.fillStyle = 'rgba(255,255,255,0.2)'; g.fillRect(0, mid - 3 * px1, W, 6 * px1);
+    g.fillStyle = tint; g.fillRect(0, mid - 3 * px1, px, 6 * px1);
   }
   // the play head: a line through the waveform, and a dot you can always find
-  const y = mode === 1 ? H - 2 : mid;
-  if (mode === 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(px - 1, 4, 2, H - 8); }
-  g.beginPath(); g.arc(Math.max(7, Math.min(W - 7, px)), y, 7, 0, Math.PI * 2);
-  g.fillStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 6; g.fill(); g.shadowBlur = 0;
+  const y = mode === 1 ? H - 2 * px1 : mid, rdot = 7 * px1;
+  if (mode === 0) { g.fillStyle = 'rgba(255,255,255,0.9)'; g.fillRect(px - px1, 4 * px1, 2 * px1, H - 8 * px1); }
+  g.beginPath(); g.arc(Math.max(rdot, Math.min(W - rdot, px)), y, rdot, 0, Math.PI * 2);
+  g.fillStyle = '#fff'; g.shadowColor = 'rgba(0,0,0,0.5)'; g.shadowBlur = 6 * px1; g.fill(); g.shadowBlur = 0;
 }
 
 // ---- the living background
