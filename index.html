@@ -386,7 +386,7 @@ function layout() {
 }
 
 // The grid sized by the room from the cover's top to the playing title's foot: three rows, the
-// bottom row's song titles ending on the same line as the title playing (whose height changes
+// bottom row's last words (the artist under each) ending on the same line as the title playing (whose height changes
 // with how many lines it takes). The covers are as big as that allows; as many columns as fit.
 let gridCols = 6;
 function gridFit(cv, vw) {
@@ -398,7 +398,8 @@ function gridFit(cv, vw) {
   const titleFoot = cv.bottom + 2.6 * vw + title.offsetHeight;
   const b = cell.querySelector('b'), sp = cell.querySelector('span');
   const mt = 0.5 * vw, bh = b.offsetHeight, capH = mt + bh + sp.offsetHeight, gap = 1.4 * vw, gapc = 1.2 * vw;
-  const w = (titleFoot - cv.top - 2 * capH - 2 * gap - (mt + bh)) / 3;
+  // The bottom row's LAST line (its artist) ends on the title's foot.
+  const w = (titleFoot - cv.top - 3 * capH - 2 * gap) / 3;
   if (w < 2 * vw) return;
   const cols = Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (w + gapc))));
   box.style.gridTemplateColumns = 'repeat(' + cols + ', ' + w + 'px)';
