@@ -131,7 +131,12 @@ function tick() {
 requestAnimationFrame(tick);
 
 const context = cast.framework.CastReceiverContext.getInstance();
-context.addCustomMessageListener(NS, e => { try { apply(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); } });
+let told = false;
+context.addCustomMessageListener(NS, e => {
+  try { apply(typeof e.data === 'string' ? JSON.parse(e.data) : e.data); } catch (x) { console.log(x); }
+  // The first message from the PC is answered with what this screen measures.
+  if (!told) { told = true; try { context.sendCustomMessage(NS, e.senderId, measures()); } catch (x) { console.log(x); } }
+});
 const options = new cast.framework.CastReceiverOptions();
 options.customNamespaces = { [NS]: cast.framework.system.MessageType.JSON };
 options.disableIdleTimeout = true;   // a now-playing screen: it stays while the PC talks to it
@@ -146,9 +151,14 @@ function measures() {
     ah: screen.availHeight, dpr: devicePixelRatio, vs: vv ? vv.scale : null, vw: vv ? vv.width : null,
     ua: navigator.userAgent };
 }
-context.addEventListener(cast.framework.system.EventType.SENDER_CONNECTED, e => {
-  setTimeout(() => { try { context.sendCustomMessage(NS, e.senderId, measures()); } catch (x) { console.log(x); } }, 500);
-});
+// And shown in a corner for the first 20 s, to read off the TV itself.
+(function () {
+  const m = measures(), d = document.createElement('div');
+  d.style.cssText = 'position:fixed;left:8px;top:8px;z-index:9;font:14px monospace;color:#ff0;background:rgba(0,0,0,.6);padding:4px 8px';
+  d.textContent = 'inner ' + m.iw + 'x' + m.ih + '  client ' + m.cw + 'x' + m.ch + '  screen ' + m.sw + 'x' + m.sh + '  dpr ' + m.dpr + '  vv ' + m.vs;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 20000);
+})();
 </script>
 </body>
 </html>
