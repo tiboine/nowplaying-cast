@@ -48,7 +48,8 @@
   #strip { width: 26vw; height: 3vw; margin-top: 1.6vw; display: block; }
   #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.4vw; }
   /* Right: the lyrics, the sung line bright and a third down; or the list, or the artist. */
-  #right { height: 100vh; position: relative; overflow: hidden; margin-right: 6vw; }
+  /* its right margin as the cover's left one (7vw) */
+  #right { height: 100vh; position: relative; overflow: hidden; margin-right: 7vw; }
   #lyr { position: absolute; left: 0; right: 0; top: 10vh; bottom: 10vh;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
@@ -402,6 +403,7 @@ function gridFit(cv, vw) {
   const cols = Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (w + gapc))));
   box.style.gridTemplateColumns = 'repeat(' + cols + ', ' + w + 'px)';
   box.style.rowGap = gap + 'px'; box.style.columnGap = gapc + 'px';
+  box.style.justifyContent = 'space-between';   // the last column ends at the right margin
   const cells = box.children;
   for (let i = 0; i < cells.length; i++) cells[i].style.display = i < cols * 3 ? '' : 'none';
   if (cols !== gridCols) { gridCols = cols; rightSig = null; right(); }   // a playlist's rows start where the playing one is
