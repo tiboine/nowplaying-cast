@@ -149,13 +149,43 @@ options.disableIdleTimeout = true;   // a now-playing screen: it stays while the
 options.skipPlayersLoad = true;      // no media player of its own
 context.start(options);
 
+// Staying awake. Google TV puts its screensaver over an app that plays no media after a few
+// minutes without the remote -- and this page plays none. So: the Screen Wake Lock, and a tiny
+// muted video (a canvas stream, a pixel's worth of change a second) playing in a corner, which is
+// what the TV looks for. Which of the two took is told to the PC with the measures.
+let awakeHow = [];
+async function stayAwake() {
+  awakeHow = [];
+  try {
+    if (navigator.wakeLock) { await navigator.wakeLock.request('screen'); awakeHow.push('wake lock'); }
+    else awakeHow.push('no wake lock API');
+  } catch (x) { awakeHow.push('wake lock refused (' + x.name + ')'); }
+  try {
+    let v = document.getElementById('awake');
+    if (!v) {
+      const c = document.createElement('canvas'); c.width = c.height = 16;
+      const g = c.getContext('2d'); let n = 0;
+      setInterval(() => { g.fillStyle = (n++ & 1) ? '#070708' : '#08070a'; g.fillRect(0, 0, 16, 16); }, 1000);
+      v = document.createElement('video'); v.id = 'awake';
+      v.muted = true; v.loop = true; v.playsInline = true; v.autoplay = true;
+      v.style.cssText = 'position:fixed;right:0;bottom:0;width:16px;height:16px;opacity:0.02;pointer-events:none';
+      v.srcObject = c.captureStream(1);
+      document.body.appendChild(v);
+    }
+    await v.play();
+    awakeHow.push('video playing');
+  } catch (x) { awakeHow.push('video refused (' + x.name + ')'); }
+}
+stayAwake();
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') stayAwake(); });
+
 // What this screen really is (a Google TV Streamer drew us on ~80 % of it): told to the PC, which logs it.
 function measures() {
   const vv = window.visualViewport;
   return { type: 'info', iw: innerWidth, ih: innerHeight, cw: document.documentElement.clientWidth,
     ch: document.documentElement.clientHeight, sw: screen.width, sh: screen.height, aw: screen.availWidth,
     ah: screen.availHeight, dpr: devicePixelRatio, vs: vv ? vv.scale : null, vw: vv ? vv.width : null,
-    ua: navigator.userAgent };
+    ua: navigator.userAgent, awake: awakeHow.join(', ') };
 }
 // And if the screen still shows more than the page was laid out for (the visual viewport wider
 // than the layout one), the whole page is scaled up from the top-left corner to fill it.
