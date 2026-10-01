@@ -156,7 +156,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01g';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-01h';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -351,7 +351,7 @@ function buildList() {
   });
   if (!items.length) {
     const d = document.createElement('div'); d.className = 'empty';
-    d.textContent = (appNow === 'TIDAL' ? 'TIDAL shows what comes next only while its queue is open. ' : '') + 'Nothing coming up that the player shows yet.';
+    d.textContent = m.note ? m.note : (appNow === 'TIDAL' ? 'TIDAL shows what comes next only while its queue is open. ' : '') + 'Nothing coming up that the player shows yet.';
     box.appendChild(d);
   }
 }
