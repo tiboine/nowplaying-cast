@@ -9,7 +9,10 @@
 <!-- The Cast receiver framework (Google's): gives us the channel the PC's app talks on. -->
 <script src="https://www.gstatic.com/cast/sdk/libs/caf_receiver/v3/cast_receiver_framework.js"></script>
 <style>
-  :root { --tint: #7a9cff; --head: 0px; }
+  :root { --tint: #7a9cff; --head: 0px;
+    /* the size unit (2.68.1): a hundredth of the width on a 16:9 screen, of 16/9 of the height on a
+       wider one (3440x1440: everything measured in vw ran off the bottom) */
+    --u: min(1vw, 1.7778vh); }
   /* body clips (and is what fill() scales); html must not, or the scaled page is cut at the old size */
   html { background: #07070a; }
   html, body { margin: 0; height: 100%; background: #07070a; color: #fff;
@@ -21,100 +24,127 @@
   .bg { position: absolute; left: -20%; top: -20%; width: 140%; height: 140%; opacity: 0;
     transition: opacity 1.6s ease; will-change: transform, opacity; }
   .bg.on { opacity: 1; }
-  .blob { position: absolute; width: 70vw; height: 70vw; border-radius: 50%; left: 15vw; top: -10vw;
+  .blob { position: absolute; width: calc(70 * var(--u)); height: calc(70 * var(--u)); border-radius: 50%; left: calc(15 * var(--u)); top: -calc(10 * var(--u));
     opacity: 0; transition: opacity 2s ease, background 2s ease; mix-blend-mode: screen; will-change: transform; }
   .blob.on { opacity: 0.32; }
   #veil { position: absolute; inset: 0; background: radial-gradient(ellipse at 30% 50%, rgba(0,0,0,0.12), rgba(0,0,0,0.62) 78%); }
   #stage { position: absolute; inset: 0; display: grid; grid-template-columns: 38% 62%; align-items: center; }
   /* Left: the sharp cover, its title and the time. */
-  #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: 7vw; }
+  #left { display: flex; flex-direction: column; align-items: flex-start; padding-left: calc(7 * var(--u)); }
   /* The cover's frame: a new track's picture rises in from below while the old one leaves over
      the top -- moved, never faded (a fade looked cheap). The frame clips them. */
-  #covers { position: relative; width: 26vw; height: 26vw; border-radius: 1.2vw; overflow: hidden;
-    box-shadow: 0 2.5vw 6vw rgba(0,0,0,0.55); background: #222; }
+  #covers { position: relative; width: calc(26 * var(--u)); height: calc(26 * var(--u)); border-radius: calc(1.2 * var(--u)); overflow: hidden;
+    box-shadow: 0 calc(2.5 * var(--u)) calc(6 * var(--u)) rgba(0,0,0,0.55); background: #222; }
   .cov { position: absolute; inset: 0; background: #222 center/cover no-repeat; will-change: transform; }
   .cov.anim { transition: transform 0.7s cubic-bezier(.3,.7,.2,1); }
   .words { transition: opacity 0.28s ease, transform 0.45s cubic-bezier(.2,.8,.2,1); }
-  .words.out { opacity: 0; transform: translateY(-0.8vw); }
-  .words.pre { opacity: 0; transform: translateY(1vw); transition: none; }
+  .words.out { opacity: 0; transform: translateY(-calc(0.8 * var(--u))); }
+  .words.pre { opacity: 0; transform: translateY(calc(1 * var(--u))); transition: none; }
   /* A long title or artist gets smaller rather than cut (fitText), and at the smallest wraps to
      a second line. */
-  #title { font-size: 3.1vw; font-weight: 700; margin-top: 2.6vw; width: 28vw; line-height: 1.12; white-space: nowrap; }
-  #artist { font-size: 1.9vw; opacity: 0.72; margin-top: 0.5vw; width: 28vw; line-height: 1.2; white-space: nowrap; }
+  #title { font-size: calc(3.1 * var(--u)); font-weight: 700; margin-top: calc(2.6 * var(--u)); width: calc(28 * var(--u)); line-height: 1.12; white-space: nowrap; }
+  #artist { font-size: calc(1.9 * var(--u)); opacity: 0.72; margin-top: calc(0.5 * var(--u)); width: calc(28 * var(--u)); line-height: 1.2; white-space: nowrap; }
   #title.wrap, #artist.wrap { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
   #title.wrap { -webkit-line-clamp: 3; }
   #artist.wrap { -webkit-line-clamp: 2; }
-  #from { font-size: 0.95vw; letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: 1.2vw; min-height: 1.2vw; line-height: 1.2vw; }
-  #strip { width: 26vw; height: 3vw; margin-top: 1.6vw; display: block; }
-  #times { width: 26vw; display: flex; justify-content: space-between; font-size: 0.95vw; opacity: 0.6; margin-top: 0.4vw; }
+  #from { font-size: calc(0.95 * var(--u)); letter-spacing: 0.25em; text-transform: uppercase; opacity: 0.5; margin-bottom: calc(1.2 * var(--u)); min-height: calc(1.2 * var(--u)); line-height: calc(1.2 * var(--u)); }
+  #strip { width: calc(26 * var(--u)); height: calc(3 * var(--u)); margin-top: calc(1.6 * var(--u)); display: block; }
+  #times { width: calc(26 * var(--u)); display: flex; justify-content: space-between; font-size: calc(0.95 * var(--u)); opacity: 0.6; margin-top: calc(0.4 * var(--u)); }
   /* Right: the lyrics, the sung line bright and a third down; or the list, or the artist. */
-  /* its right margin as the cover's left one (7vw) */
-  #right { height: 100vh; position: relative; overflow: hidden; margin-right: 7vw; }
+  /* its right margin as the cover's left one (calc(7 * var(--u))) */
+  #right { height: 100vh; position: relative; overflow: hidden; margin-right: calc(7 * var(--u)); }
   #lyr { position: absolute; left: 0; right: 0; top: 10vh; bottom: 10vh;
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0, #000 18%, #000 78%, transparent 100%);
     transition: opacity 0.5s ease; }
   #lines { position: absolute; left: 0; right: 0; top: 0; transition: transform 0.55s cubic-bezier(.25,.8,.25,1); }
-  .line { font-size: 2.6vw; font-weight: 700; line-height: 1.25; padding: 0.55vw 0; opacity: 0.28;
-    transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(0.06vw); }
+  .line { font-size: calc(2.6 * var(--u)); font-weight: 700; line-height: 1.25; padding: calc(0.55 * var(--u)) 0; opacity: 0.28;
+    transition: opacity 0.4s, color 0.4s, filter 0.4s; filter: blur(calc(0.06 * var(--u))); }
   .line.now { opacity: 1; filter: none; }
   .line.near { opacity: 0.5; filter: none; }
-  .line .rom { display: block; font-size: 0.55em; font-weight: 400; opacity: 0.75; margin-top: 0.2vw; }
+  .line .rom { display: block; font-size: 0.55em; font-weight: 400; opacity: 0.75; margin-top: calc(0.2 * var(--u)); }
   /* Karaoke, as the full screen: each word fills with the sung colour as it is sung (--p), the
      part not yet sung a dim white; sung words stay coloured. */
   .line.now .w { background-image: linear-gradient(90deg, var(--sung, #fff) calc(var(--p, 0%) - 8%), rgba(255,255,255,0.41) var(--p, 0%));
     -webkit-background-clip: text; background-clip: text; color: transparent; }
   /* The list and the artist start level with "playing from" on the left (--head). */
   #list, #art { position: absolute; left: 0; right: 0; top: var(--head); bottom: 0; transition: opacity 0.5s ease; }
-  .empty { font-size: 1.5vw; opacity: 0.6; max-width: 40vw; line-height: 1.5; }
-  .cap { font-size: 0.95vw; letter-spacing: 0.25em; opacity: 0.55; line-height: 1.2vw; margin-bottom: 1.4vw; text-transform: uppercase; }
-  .nx { display: flex; align-items: center; margin-bottom: 1.1vw; }
-  .nx .a { width: 4.4vw; height: 4.4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
-  .nx .t { margin-left: 1.2vw; min-width: 0; }
-  .nx .t b { display: block; font-size: 1.6vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .nx .t span { display: block; font-size: 1.1vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .empty { font-size: calc(1.5 * var(--u)); opacity: 0.6; max-width: calc(40 * var(--u)); line-height: 1.5; }
+  .cap { font-size: calc(0.95 * var(--u)); letter-spacing: 0.25em; opacity: 0.55; line-height: calc(1.2 * var(--u)); margin-bottom: calc(1.4 * var(--u)); text-transform: uppercase; }
+  .nx { display: flex; align-items: center; margin-bottom: calc(1.1 * var(--u)); }
+  .nx .a { width: calc(4.4 * var(--u)); height: calc(4.4 * var(--u)); border-radius: calc(0.5 * var(--u)); background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
+  .nx .t { margin-left: calc(1.2 * var(--u)); min-width: 0; }
+  .nx .t b { display: block; font-size: calc(1.6 * var(--u)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .nx .t span { display: block; font-size: calc(1.1 * var(--u)); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .nx.now .t b { color: var(--sung, #fff); }
-  .nx.now .a, .cell.now .a { box-shadow: 0 0 0 0.25vw var(--sung, #fff); }
+  .nx.now .a, .cell.now .a { box-shadow: 0 0 0 calc(0.25 * var(--u)) var(--sung, #fff); }
   /* minmax(0, 1fr): a plain 1fr is at least as wide as a cell's longest title (no wrap), and one
      long title made its column twice as wide and pushed the last off the screen. */
-  #items.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1.4vw 1.2vw; }
+  #items.grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: calc(1.4 * var(--u)) calc(1.2 * var(--u)); }
   .cell { min-width: 0; }
-  .cell .a { width: 100%; padding-top: 100%; border-radius: 0.6vw; background: rgba(255,255,255,0.1) center/cover no-repeat; }
-  .cell b { display: block; font-size: 0.95vw; margin-top: 0.5vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .cell span { display: block; font-size: 0.8vw; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #art .top { display: flex; align-items: center; gap: 2vw; }
-  #art .pic { width: 12vw; height: 12vw; border-radius: 50%; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; box-shadow: 0 1.5vw 4vw rgba(0,0,0,0.5); }
-  #art .name { font-size: 3vw; font-weight: 700; line-height: 1.1; }
-  #art .facts { font-size: 1.2vw; opacity: 0.7; margin-top: 0.6vw; }
-  #art .tags { font-size: 1vw; opacity: 0.55; margin-top: 0.4vw; letter-spacing: 0.05em; }
-  #art .bio { font-size: 1.35vw; line-height: 1.55; opacity: 0.85; margin-top: 2.4vw; max-width: 50vw;
+  .cell .a { width: 100%; padding-top: 100%; border-radius: calc(0.6 * var(--u)); background: rgba(255,255,255,0.1) center/cover no-repeat; }
+  .cell b { display: block; font-size: calc(0.95 * var(--u)); margin-top: calc(0.5 * var(--u)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cell span { display: block; font-size: calc(0.8 * var(--u)); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #art .top { display: flex; align-items: center; gap: calc(2 * var(--u)); }
+  #art .pic { width: calc(12 * var(--u)); height: calc(12 * var(--u)); border-radius: 50%; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; box-shadow: 0 calc(1.5 * var(--u)) calc(4 * var(--u)) rgba(0,0,0,0.5); }
+  #art .name { font-size: calc(3 * var(--u)); font-weight: 700; line-height: 1.1; }
+  #art .facts { font-size: calc(1.2 * var(--u)); opacity: 0.7; margin-top: calc(0.6 * var(--u)); }
+  #art .tags { font-size: calc(1 * var(--u)); opacity: 0.55; margin-top: calc(0.4 * var(--u)); letter-spacing: 0.05em; }
+  #art .bio { font-size: calc(1.35 * var(--u)); line-height: 1.55; opacity: 0.85; margin-top: calc(2.4 * var(--u)); max-width: calc(50 * var(--u));
     display: -webkit-box; -webkit-line-clamp: 9; -webkit-box-orient: vertical; overflow: hidden; }
   #idle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-    font-size: 2vw; letter-spacing: 0.4em; opacity: 0.5; }
+    font-size: calc(2 * var(--u)); letter-spacing: 0.4em; opacity: 0.5; }
   .hidden { display: none !important; }
   .gone { visibility: hidden; }
   .faded { opacity: 0; }
   /* Whose music it is: the player's mark and name, top left. */
-  #badge { position: absolute; left: 4vw; top: 5vh; display: flex; align-items: center; gap: 0.8vw;
-    font-size: 1.05vw; letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.75; }
-  #badge img { width: 2.2vw; height: 2.2vw; object-fit: contain; filter: drop-shadow(0 0.2vw 0.4vw rgba(0,0,0,0.5)); }
+  #badge { position: absolute; left: calc(4 * var(--u)); top: 5vh; display: flex; align-items: center; gap: calc(0.8 * var(--u));
+    font-size: calc(1.05 * var(--u)); letter-spacing: 0.18em; text-transform: uppercase; opacity: 0.75; }
+  #badge img { width: calc(2.2 * var(--u)); height: calc(2.2 * var(--u)); object-fit: contain; filter: drop-shadow(0 calc(0.2 * var(--u)) calc(0.4 * var(--u)) rgba(0,0,0,0.5)); }
   /* The clock, top right. */
   /* The clock, top right: the player's name's size and look, level with it. */
-  #clock { position: absolute; right: 4vw; top: 5vh; height: 2.2vw; line-height: 2.2vw; font-size: 1.05vw; letter-spacing: 0.18em; opacity: 0.75; }
+  #clock { position: absolute; right: calc(4 * var(--u)); top: 5vh; height: calc(2.2 * var(--u)); line-height: calc(2.2 * var(--u)); font-size: calc(1.05 * var(--u)); letter-spacing: 0.18em; opacity: 0.75; }
   /* What comes next, in the corner in a song's last 20 s (while the lyrics show). */
-  #corner { position: absolute; right: 4vw; bottom: 6vh; display: flex; align-items: center; gap: 1vw;
-    padding: 0.9vw 1.4vw 0.9vw 0.9vw; border-radius: 1vw; background: rgba(0,0,0,0.38);
-    transform: translateY(14vh); opacity: 0; transition: transform 0.6s cubic-bezier(.2,.8,.2,1), opacity 0.5s; max-width: 30vw; }
+  #corner { position: absolute; right: calc(4 * var(--u)); bottom: 6vh; display: flex; align-items: center; gap: calc(1 * var(--u));
+    padding: calc(0.9 * var(--u)) calc(1.4 * var(--u)) calc(0.9 * var(--u)) calc(0.9 * var(--u)); border-radius: calc(1 * var(--u)); background: rgba(0,0,0,0.38);
+    transform: translateY(14vh); opacity: 0; transition: transform 0.6s cubic-bezier(.2,.8,.2,1), opacity 0.5s; max-width: calc(30 * var(--u)); }
   #corner.on { transform: none; opacity: 1; }
-  #corner.over { background: rgba(0,0,0,0.66); -webkit-backdrop-filter: blur(1.2vw); backdrop-filter: blur(1.2vw); box-shadow: 0 1vw 3vw rgba(0,0,0,0.5); }
+  #corner.over { background: rgba(0,0,0,0.66); -webkit-backdrop-filter: blur(calc(1.2 * var(--u))); backdrop-filter: blur(calc(1.2 * var(--u))); box-shadow: 0 calc(1 * var(--u)) calc(3 * var(--u)) rgba(0,0,0,0.5); }
   /* words under the covers, when chosen off */
   .noinfo .t { display: none; }
   #title.gone2, #artist.gone2 { display: none; }
-  #corner .a { width: 4vw; height: 4vw; border-radius: 0.5vw; background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
-  #corner .h { font-size: 0.8vw; letter-spacing: 0.3em; opacity: 0.6; }
-  #corner b { display: block; font-size: 1.3vw; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #corner span { display: block; font-size: 1vw; opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #corner .a { width: calc(4 * var(--u)); height: calc(4 * var(--u)); border-radius: calc(0.5 * var(--u)); background: rgba(255,255,255,0.1) center/cover no-repeat; flex: none; }
+  #corner .h { font-size: calc(0.8 * var(--u)); letter-spacing: 0.3em; opacity: 0.6; }
+  #corner b { display: block; font-size: calc(1.3 * var(--u)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #corner span { display: block; font-size: calc(1 * var(--u)); opacity: 0.65; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #corner .t { min-width: 0; }
+
+  /* ---- The full screen's layout (2.69.0, the owner: the TV and the browser follow the full screen,
+     its places and sizes, not a look of their own). LyricsFull's numbers, with u = the screen's
+     height: the cover fills the left third top to bottom, cropped, fading out by 0.42 of the width
+     (CoverMask's stops), darkened towards the foot; the title (u/24), the artist (u/38), the strip
+     (u/34 high) and the times (u/80) stand on it at the bottom, pad = 0.045u in from the left and
+     0.8 pad up; the lyrics, the list and the artist stand in a box 0.56 of the width and 0.8 of the
+     height, centred in the right two thirds; a line is u/28. A standing screen keeps the old layout. */
+  @media (min-aspect-ratio: 1/1) {
+    #stage { display: block; }
+    #left { position: absolute; left: 0; top: 0; bottom: 0; width: 42vw; padding: 0 0 3.6vh 4.5vh; box-sizing: border-box;
+      justify-content: flex-end; align-items: flex-start; }
+    #covers { position: absolute; left: 0; top: 0; width: 42vw; height: 100vh; border-radius: 0; box-shadow: none; z-index: 0;
+      -webkit-mask-image: linear-gradient(to right, #000 62%, rgba(0,0,0,0.78) 74%, rgba(0,0,0,0.43) 84%, rgba(0,0,0,0.16) 93%, transparent 100%);
+              mask-image: linear-gradient(to right, #000 62%, rgba(0,0,0,0.78) 74%, rgba(0,0,0,0.43) 84%, rgba(0,0,0,0.16) 93%, transparent 100%); }
+    #covers::after { content: ''; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+      background: linear-gradient(to bottom, rgba(0,0,0,0) 50%, rgba(0,0,0,0.75) 100%); }
+    #from, #title, #artist, #strip, #times { position: relative; z-index: 2; width: calc(33.333vw - 9vh); }
+    #from { font-size: 1.25vh; margin-bottom: 1.2vh; min-height: 1.5vh; line-height: 1.5vh; }
+    #title { font-size: 4.17vh; font-weight: 600; margin-top: 0; }
+    #artist { font-size: 2.63vh; opacity: 0.75; margin-top: 0.4vh; }
+    #strip { height: 2.94vh; margin-top: 2vh; }
+    #times { font-size: 1.25vh; margin-top: 0.8vh; }
+    #right { position: absolute; left: 33.333vw; width: 66.667vw; top: 0; height: 100vh; margin: 0; }
+    #lyr, #list, #art { left: 5.333vw; right: 5.333vw; top: 10vh; bottom: 10vh; }
+    .line { font-size: 3.57vh; padding: 0.75vh 0; }
+  }
 </style>
 </head>
 <body>
@@ -156,7 +186,7 @@
  * Between messages the position runs on here, so the lyrics and the time move smoothly.
  */
 const NS = 'urn:x-cast:app.nowplaying';
-const PAGE = '2026-10-01h';   // which page this is: told with the measures, to see what a TV has cached
+const PAGE = '2026-10-04f';   // which page this is: told with the measures, to see what a TV has cached
 const $ = id => document.getElementById(id);
 let st = null, at = 0, cur = -2, opts = {}, artNow = null, bgFront = 'bgA', shownKey = null, covFront = 'covA';
 let linesMsg = null, listMsg = null, artistMsg = null, wave = null, waveKey = null, bands = null, bandsAt = 0;
@@ -386,10 +416,11 @@ function corner() {
 function layout() {
   const cv = $('covers').getBoundingClientRect(), r = $('right').getBoundingClientRect();
   if (!r.height || !cv.height) return;
-  const vw = innerWidth / 100, head = cv.top - 2.4 * vw;
+  const vw = Math.min(innerWidth, innerHeight * 16 / 9) / 100, head = cv.top - 2.4 * vw;   // the unit --u is
   document.documentElement.style.setProperty('--head', Math.max(0, head - r.top) + 'px');
   const cap = $('listCap'), ch = cap.getBoundingClientRect().height;
-  if (ch) cap.style.marginBottom = Math.max(4, cv.top - head - ch) + 'px';
+  if (wide()) cap.style.marginBottom = '';   // the full screen's layout: the box stands where it stands
+  else if (ch) cap.style.marginBottom = Math.max(4, cv.top - head - ch) + 'px';
   gridFit(cv, vw);
 }
 
@@ -397,6 +428,9 @@ function layout() {
 // bottom row's last words (the artist under each) ending on the same line as the times (lower or higher as
 // the title takes more or fewer lines). The covers are as big as that allows; as many columns as fit.
 let gridCols = 6;
+// The full screen's layout (2.69.0): on a screen wider than tall.
+function wide() { return innerWidth >= innerHeight; }
+
 function gridFit(cv, vw) {
   const box = $('items');
   if (!box.classList.contains('grid') || $('list').classList.contains('hidden')) return;
@@ -405,21 +439,22 @@ function gridFit(cv, vw) {
   // column's last words; the times never glide, so their box is where they stand).
   const ROWS = opt('gridRows', 4);
   box.classList.toggle('noinfo', !opt('gridInfo', true));
-  const foot = $('times').getBoundingClientRect().bottom;
+  const foot = wide() ? $('list').getBoundingClientRect().bottom : $('times').getBoundingClientRect().bottom;
+  if (wide()) cv = { top: box.getBoundingClientRect().top };
   const b = cell.querySelector('b'), sp = cell.querySelector('span');
   const info = opt('gridInfo', true);
   const mt = info ? 0.5 * vw : 0, bh = info ? b.offsetHeight : 0, capH = info ? mt + bh + sp.offsetHeight : 0, gap = 1.4 * vw, gapc = 1.2 * vw;
   // The bottom row's LAST line (its artist) ends on the title's foot.
   const colsFor = rows => {
     const ww = (foot - cv.top - rows * capH - (rows - 1) * gap) / rows;
-    return ww < 2 * vw ? 0 : Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (ww + gapc))));
+    return ww < 2 * vw ? 0 : Math.max(2, Math.min(14, Math.floor((box.clientWidth + gapc) / (ww + gapc))));
   };
   // What each size really is on this screen, told to the PC for its menu's labels ("4 x 3").
   const c4 = colsFor(4), c3 = colsFor(3);
   if (c4 + '|' + c3 !== gridFit.told) { gridFit.told = c4 + '|' + c3; remote('grid', { c4: c4, c3: c3 }); }
   const w = (foot - cv.top - ROWS * capH - (ROWS - 1) * gap) / ROWS;
   if (w < 2 * vw) return;
-  const cols = Math.max(2, Math.min(8, Math.floor((box.clientWidth + gapc) / (w + gapc))));
+  const cols = Math.max(2, Math.min(14, Math.floor((box.clientWidth + gapc) / (w + gapc))));   // a wide screen takes more across
   box.style.gridTemplateColumns = 'repeat(' + cols + ', ' + w + 'px)';
   box.style.rowGap = gap + 'px'; box.style.columnGap = gapc + 'px';
   box.style.justifyContent = 'space-between';   // the last column ends at the right margin
